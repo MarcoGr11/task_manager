@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
 from .models import Priority, Task
-from .notifier import notify_task_created
+from .notifier_resilient import notify_task_created
 from .storage import TaskStorage
 
 storage = TaskStorage(Path(os.getenv("TASKS_DB", "tasks.json")))
@@ -35,4 +35,8 @@ def create_task(payload: TaskIn) -> dict:
     tasks.append(task)
     storage.save(tasks)
     result = notify_task_created(task.to_dict())
-    return {**task.to_dict(), "notification_delivered": result["delivered"]}
+    return {
+        **task.to_dict(),
+        "notification_delivered": result["delivered"],
+        "notification_attempts": result["attempts"],
+    }

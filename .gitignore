@@ -5,3 +5,8 @@ coverage.xml
 tasks.json
 .scannerwork/
 .coverage
+
+# Local secrets (Lab 3)
+.env
+.env.*
+!.env.example

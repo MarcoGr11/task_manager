@@ -74,10 +74,16 @@ class SensitiveDataFilter(logging.Filter):
         if record.args:
             record.args = sanitize(record.args)  # tuple, or a single dict for %(name)s formatting
         try:
-            record.msg = sanitize_text(record.getMessage())
-            record.args = None
+            merged = record.getMessage()
         except (TypeError, ValueError):  # broken format string: still never leak the raw text
-            record.msg = sanitize_text(str(record.msg))
+            record.msg, record.args = sanitize_text(str(record.msg)), None
+            merged = None
+        if merged is not None:
+            clean = sanitize_text(merged)
+            # Keep msg/args structure when possible (uvicorn's access formatter unpacks args);
+            # collapse only if a secret spans template and args, e.g. "password=%s".
+            if clean != merged:
+                record.msg, record.args = clean, None
         if record.exc_info and not record.exc_text:
             record.exc_text = sanitize_text("".join(traceback.format_exception(*record.exc_info)).rstrip("\n"))
         if record.stack_info:

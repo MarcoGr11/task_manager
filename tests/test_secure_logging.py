@@ -72,3 +72,13 @@ def test_registration_endpoint_logs_no_pii(caplog, monkeypatch, tmp_path):
 
     assert_clean(caplog.text)
     assert "Registration failed" in caplog.text and "t***@example.com" in caplog.text
+
+
+def test_args_structure_kept_for_third_party_formatters(caplog):
+    # uvicorn's access formatter unpacks record.args; the filter must not break it
+    logging.getLogger("uvicorn.access").info(
+        '%s - "%s %s HTTP/%s" %d', "127.0.0.1:5000", "GET", f"/api/search?email={EMAIL}", "1.1", 200
+    )
+    record = caplog.records[0]
+    assert isinstance(record.args, tuple) and record.args[4] == 200
+    assert_clean(caplog.text)

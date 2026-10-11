@@ -10,3 +10,8 @@ tasks.json
 .env
 .env.*
 !.env.example
+
+# Lab 4 personal data stores (synthetic, local only)
+users.json
+consents.json
+*.json.tmp

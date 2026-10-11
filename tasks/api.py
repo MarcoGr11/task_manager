@@ -3,12 +3,14 @@ import json
 import logging
 import os
 import uuid
+from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from .consent import ConsentStorage
+from . import consent_policy
+from .consent import PURPOSES, ConsentStorage
 from .logging_utils import install_sensitive_data_filter
 from .models import Priority, Task
 from .notifier_resilient import notify_task_created
@@ -154,3 +156,45 @@ def _audit(event: str, actor_id: int, subject_id: int, result: str, corr_id: str
     """Privacy-safe audit event: ids, result, time, correlation id. Never the erased values."""
     logger.info(json.dumps({"event": event, "actor_id": actor_id, "subject_id": subject_id,
                             "result": result, "correlation_id": corr_id, "at": now_iso()}))
+
+
+def _consent_command(command, user_id: int, purpose: str, actor_id: int, corr_id: str, source: str) -> dict:
+    if purpose not in PURPOSES:
+        raise HTTPException(status_code=422, detail=f"Unknown consent purpose, allowed: {sorted(PURPOSES)}")
+    authorize_subject(actor_id, user_id, corr_id, f"consent_{command.__name__}")
+    consents = consent_storage.load()
+    consent, changed = command(consents, user_id, purpose, source)
+    if changed:
+        consent_storage.save(consents)
+    _audit(f"consent_{command.__name__}", actor_id, user_id, "changed" if changed else "unchanged", corr_id)
+    return asdict(consent) if consent else {"user_id": user_id, "purpose": purpose, "is_granted": False}
+
+
+@app.post("/api/users/{user_id}/consents/{purpose}/grant")
+def grant_consent(user_id: int, purpose: str, source: str = "api", actor_id: int = Depends(current_user_id),
+                  corr_id: str = Depends(correlation_id)) -> dict:
+    return _consent_command(consent_policy.grant, user_id, purpose, actor_id, corr_id, source)
+
+
+@app.post("/api/users/{user_id}/consents/{purpose}/revoke")
+def revoke_consent(user_id: int, purpose: str, source: str = "api", actor_id: int = Depends(current_user_id),
+                   corr_id: str = Depends(correlation_id)) -> dict:
+    return _consent_command(consent_policy.revoke, user_id, purpose, actor_id, corr_id, source)
+
+
+def send_marketing_email(user: User) -> None:
+    """Simulated side effect (no real mail server in the lab)."""
+    logger.info("would send marketing email to %s", user.email)
+
+
+@app.post("/api/users/{user_id}/send-marketing-email")
+def marketing_email(user_id: int, actor_id: int = Depends(current_user_id),
+                    corr_id: str = Depends(correlation_id)) -> dict:
+    _, user = authorize_subject(actor_id, user_id, corr_id, "send_marketing_email")
+    # Policy Gate right before the dependent action, with freshly loaded consents.
+    if not consent_policy.check_consent(user_id, "MARKETING_EMAIL", consent_storage.load()):
+        _audit("marketing_email", actor_id, user_id, "DENY", corr_id)
+        raise HTTPException(status_code=403, detail="DENY: no valid consent for MARKETING_EMAIL")
+    send_marketing_email(user)
+    _audit("marketing_email", actor_id, user_id, "ALLOW", corr_id)
+    return {"decision": "ALLOW", "sent": True}

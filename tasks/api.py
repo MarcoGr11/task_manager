@@ -1,15 +1,17 @@
 """HTTP API for the task manager."""
 import logging
 import os
+import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from .consent import ConsentStorage
 from .logging_utils import install_sensitive_data_filter
 from .models import Priority, Task
 from .notifier_resilient import notify_task_created
+from .privacy import build_export
 from .storage import TaskStorage
 from .user import User, hash_password
 from .user_storage import UserStorage
@@ -33,6 +35,24 @@ def current_user_id(x_user_id: int | None = Header(default=None)) -> int:
     if x_user_id is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return x_user_id
+
+
+def correlation_id(x_correlation_id: str | None = Header(default=None)) -> str:
+    return x_correlation_id or uuid.uuid4().hex
+
+
+def authorize_subject(actor_id: int, subject_id: int, corr_id: str, action: str, allow_admin: bool = False):
+    """Actor must BE the subject (or an admin where allowed). Same 403 for a foreign id and
+    for an id that does not exist, so the response never reveals whether a profile exists."""
+    users = user_storage.load()
+    subject = user_storage.find(users, subject_id)
+    actor = user_storage.find(users, actor_id)
+    is_admin = allow_admin and actor is not None and actor.is_admin
+    if subject is None or (actor_id != subject_id and not is_admin):
+        logger.warning("access_denied action=%s actor_id=%s subject_id=%s correlation_id=%s",
+                       action, actor_id, subject_id, corr_id)
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return users, subject
 
 
 class UserIn(BaseModel):
@@ -98,3 +118,15 @@ def register_user(payload: UserIn) -> dict:
     user_storage.save(users)
     logger.info(f"User registered: id={user.id} email={user.email} phone={user.phone}")
     return {"id": user.id}
+
+
+@app.get("/api/users/{user_id}/personal-data")
+def export_personal_data(
+    user_id: int, actor_id: int = Depends(current_user_id), corr_id: str = Depends(correlation_id)
+) -> dict:
+    _, user = authorize_subject(actor_id, user_id, corr_id, "personal_data_export")
+    export = build_export(user, storage.load(), consent_storage.load())
+    # Audit the fact only: never the exported JSON itself.
+    logger.info("personal_data_export result=success actor_id=%s subject_id=%s correlation_id=%s",
+                actor_id, user_id, corr_id)
+    return export

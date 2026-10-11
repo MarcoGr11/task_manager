@@ -1,6 +1,7 @@
 pytest>=8.0
 pytest-cov>=5.0
-fastapi==0.109.0  # Lab3 demo: outdated pin (vulnerable)
+fastapi>=0.141.1
+starlette>=1.3.1  # transitive via fastapi; floor = fix version for CVE-2026-54283 and older starlette advisories
 uvicorn>=0.30
 httpx>=0.27
 pydantic>=2.0

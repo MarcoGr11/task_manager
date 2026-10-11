@@ -7,6 +7,7 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from .consent import ConsentStorage
+from .logging_utils import install_sensitive_data_filter
 from .models import Priority, Task
 from .notifier_resilient import notify_task_created
 from .storage import TaskStorage
@@ -14,6 +15,7 @@ from .user import User, hash_password
 from .user_storage import UserStorage
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+install_sensitive_data_filter()  # central PII/secret sanitizer for all loggers
 logger = logging.getLogger(__name__)
 
 storage = TaskStorage(Path(os.getenv("TASKS_DB", "tasks.json")))
@@ -78,7 +80,6 @@ def _validate_new_user(payload: UserIn, users: list[User]) -> None:
 
 @app.post("/api/users", status_code=201)
 def register_user(payload: UserIn) -> dict:
-    logger.info("Register request: %s", payload.model_dump())
     users = user_storage.load()
     try:
         _validate_new_user(payload, users)
@@ -95,5 +96,5 @@ def register_user(payload: UserIn) -> dict:
     )
     users.append(user)
     user_storage.save(users)
-    logger.info(f"User registered: {user.email}, phone {user.phone}")
+    logger.info(f"User registered: id={user.id} email={user.email} phone={user.phone}")
     return {"id": user.id}

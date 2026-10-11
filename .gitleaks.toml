@@ -1,0 +1,7 @@
+# Default gitleaks rules + one documented exception.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Lab 4 evidence: pre-sanitizer log with SYNTHETIC values (shows what the filter fixes)"
+paths = ['''lab4_results/logging_before\.txt''']

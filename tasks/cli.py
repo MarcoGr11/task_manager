@@ -31,74 +31,68 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run(args: argparse.Namespace, storage: TaskStorage) -> str:
-    tasks = storage.load()
+PRIORITY_MARKERS = {Priority.HIGH: " !!!", Priority.MEDIUM: " !", Priority.LOW: ""}
 
-    if args.command == "add":
-        task = Task(
-            id=storage.next_id(tasks),
-            title=args.title,
-            priority=Priority[args.priority],
-        )
-        tasks.append(task)
-        storage.save(tasks)
-        return f"Added task #{task.id}: {task.title}"
 
-    if args.command == "list":
-        if not tasks:
-            return "No tasks yet."
-        lines = []
-        for t in tasks:
-            if args.status is not None:
-                if t.status.value != args.status:
-                    continue
-            if args.priority is not None:
-                if t.priority.name != args.priority:
-                    continue
-            if args.tag is not None:
-                if args.tag.strip().lower() not in t.tags:
-                    continue
-            if args.overdue:
-                if not t.is_overdue(date.today()):
-                    continue
-            if t.priority == Priority.HIGH:
-                marker = "!!!"
-            elif t.priority == Priority.MEDIUM:
-                marker = "!"
-            else:
-                marker = ""
-            line = f"#{t.id} [{t.status.value}] {t.title}"
-            if marker:
-                line = f"{line} {marker}"
-            if t.due_date is not None:
-                if t.is_overdue(date.today()):
-                    line = f"{line} (OVERDUE since {t.due_date.isoformat()})"
-                else:
-                    line = f"{line} (due {t.due_date.isoformat()})"
-            lines.append(line)
-        if not lines:
-            return "No tasks match the filters."
-        return "\n".join(lines)
+def _matches(task: Task, args: argparse.Namespace, today: date) -> bool:
+    if args.status is not None and task.status.value != args.status:
+        return False
+    if args.priority is not None and task.priority.name != args.priority:
+        return False
+    if args.tag is not None and args.tag.strip().lower() not in task.tags:
+        return False
+    return not args.overdue or task.is_overdue(today)
 
-    if args.command == "stats":
-        by_status = count_by_status(tasks)
-        overdue = overdue_tasks(tasks, date.today())
-        rate = completion_rate(tasks)
-        return (
-            f"Completion rate: {rate}%\n"
-            f"By status: {by_status}\n"
-            f"Overdue: {len(overdue)}"
-        )
 
-    if args.command == "done":
-        for task in tasks:
-            if task.id == args.task_id:
-                task.mark_done()
-                storage.save(tasks)
-                return f"Task #{task.id} marked done."
+def _format_line(task: Task, today: date) -> str:
+    line = f"#{task.id} [{task.status.value}] {task.title}{PRIORITY_MARKERS[task.priority]}"
+    if task.due_date is None:
+        return line
+    if task.is_overdue(today):
+        return f"{line} (OVERDUE since {task.due_date.isoformat()})"
+    return f"{line} (due {task.due_date.isoformat()})"
+
+
+def _cmd_add(args: argparse.Namespace, storage: TaskStorage, tasks: list[Task]) -> str:
+    task = Task(id=storage.next_id(tasks), title=args.title, priority=Priority[args.priority])
+    tasks.append(task)
+    storage.save(tasks)
+    return f"Added task #{task.id}: {task.title}"
+
+
+def _cmd_list(args: argparse.Namespace, storage: TaskStorage, tasks: list[Task]) -> str:
+    if not tasks:
+        return "No tasks yet."
+    today = date.today()
+    lines = [_format_line(t, today) for t in tasks if _matches(t, args, today)]
+    return "\n".join(lines) or "No tasks match the filters."
+
+
+def _cmd_stats(args: argparse.Namespace, storage: TaskStorage, tasks: list[Task]) -> str:
+    return (
+        f"Completion rate: {completion_rate(tasks)}%\n"
+        f"By status: {count_by_status(tasks)}\n"
+        f"Overdue: {len(overdue_tasks(tasks, date.today()))}"
+    )
+
+
+def _cmd_done(args: argparse.Namespace, storage: TaskStorage, tasks: list[Task]) -> str:
+    task = next((t for t in tasks if t.id == args.task_id), None)
+    if task is None:
         return f"Task #{args.task_id} not found."
+    task.mark_done()
+    storage.save(tasks)
+    return f"Task #{task.id} marked done."
 
-    return "Unknown command."
+
+COMMANDS = {"add": _cmd_add, "list": _cmd_list, "stats": _cmd_stats, "done": _cmd_done}
+
+
+def run(args: argparse.Namespace, storage: TaskStorage) -> str:
+    handler = COMMANDS.get(args.command)
+    if handler is None:
+        return "Unknown command."
+    return handler(args, storage, storage.load())
 
 
 def main() -> None:

@@ -12,7 +12,7 @@ from tasks.user import User
 from tasks.user_storage import UserStorage
 
 ALICE = User(1, "Alice Example", "alice@example.com", "+380501234567",
-             "pbkdf2_sha256$00$synthetic-hash", "synthetic-reset-token")
+             "pbkdf2_sha256$00$alice-synthetic-hash", "synthetic-reset-token")
 BOB = User(2, "Bob Sample", "bob@example.com", "+380671112233", "pbkdf2_sha256$00$synthetic-hash-2", None)
 ADMIN = User(3, "Admin Demo", "admin@example.com", "+380931234500", "pbkdf2_sha256$00$x", None, is_admin=True)
 

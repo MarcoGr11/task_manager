@@ -10,7 +10,7 @@ class User:
     name: str
     email: str
     phone: str
-    password_hash: str  # never returned outside (export, logs, API responses)
+    password_hash: str | None  # never returned outside (export, logs, API responses)
     reset_token: str | None  # never returned outside
     marketing_opt_in_source: str = "signup_form"
     is_admin: bool = False  # internal security flag, never exported

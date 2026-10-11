@@ -1,4 +1,5 @@
 """HTTP API for the task manager."""
+import json
 import logging
 import os
 import uuid
@@ -11,10 +12,10 @@ from .consent import ConsentStorage
 from .logging_utils import install_sensitive_data_filter
 from .models import Priority, Task
 from .notifier_resilient import notify_task_created
-from .privacy import build_export
+from .privacy import anonymize_user, build_export, now_iso
 from .storage import TaskStorage
 from .user import User, hash_password
-from .user_storage import UserStorage
+from .user_storage import UserStorage, save_all
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 install_sensitive_data_filter()  # central PII/secret sanitizer for all loggers
@@ -130,3 +131,26 @@ def export_personal_data(
     logger.info("personal_data_export result=success actor_id=%s subject_id=%s correlation_id=%s",
                 actor_id, user_id, corr_id)
     return export
+
+
+@app.post("/api/users/{user_id}/anonymize")
+def anonymize(
+    user_id: int, actor_id: int = Depends(current_user_id), corr_id: str = Depends(correlation_id)
+) -> dict:
+    users, user = authorize_subject(actor_id, user_id, corr_id, "anonymize", allow_admin=True)
+    try:
+        consents = consent_storage.load()
+        changed = anonymize_user(user, consents, now_iso())
+        if changed:  # one write at the end: all-or-nothing
+            save_all([(user_storage, users), (consent_storage, consents)])
+    except Exception:
+        _audit("user_anonymized", actor_id, user_id, "failure", corr_id)
+        raise HTTPException(status_code=500, detail="Anonymization failed, no changes applied")
+    _audit("user_anonymized", actor_id, user_id, "success" if changed else "already_anonymized", corr_id)
+    return {"subject_id": user_id, "status": "anonymized", "anonymized_at": user.anonymized_at}
+
+
+def _audit(event: str, actor_id: int, subject_id: int, result: str, corr_id: str) -> None:
+    """Privacy-safe audit event: ids, result, time, correlation id. Never the erased values."""
+    logger.info(json.dumps({"event": event, "actor_id": actor_id, "subject_id": subject_id,
+                            "result": result, "correlation_id": corr_id, "at": now_iso()}))

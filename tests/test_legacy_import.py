@@ -34,3 +34,19 @@ def test_run_migration_expression_known_filter():
 def test_run_migration_expression_unknown_raises():
     with pytest.raises(ValueError):
         run_migration_expression("os.system('rm -rf /')", {})
+
+
+def test_classify_row_none_returns_none():
+    assert classify_row(None, strict_mode=False, allow_empty_title=False, default_priority="LOW") is None
+
+
+@pytest.mark.parametrize("row", [{"title": ""}, {"title": "X", "status": "blocked"}, {"title": "X", "tags": "a,b"}])
+def test_classify_row_strict_invalid_raises(row):
+    with pytest.raises(ValueError):
+        classify_row(row, strict_mode=True, allow_empty_title=False, default_priority="LOW")
+
+
+def test_classify_row_lenient_falls_back_to_defaults():
+    row = {"title": "", "priority": "URGENT", "status": "blocked", "tags": "a,b"}
+    result = classify_row(row, strict_mode=False, allow_empty_title=True, default_priority="MEDIUM")
+    assert result == {"priority": "MEDIUM", "status": "todo", "tags": []}

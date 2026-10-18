@@ -6,7 +6,10 @@ import uuid
 from dataclasses import asdict
 from pathlib import Path
 
+import psutil
 from fastapi import Depends, FastAPI, Header, HTTPException
+from prometheus_client import Gauge
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, Field
 
 from . import consent_policy
@@ -27,6 +30,12 @@ storage = TaskStorage(Path(os.getenv("TASKS_DB", "tasks.json")))
 user_storage = UserStorage(Path(os.getenv("USERS_DB", "users.json")))
 consent_storage = ConsentStorage(Path(os.getenv("CONSENTS_DB", "consents.json")))
 app = FastAPI(title="Task Manager API")
+Instrumentator().instrument(app).expose(app)  # GET /metrics: request count/latency histograms
+
+# prometheus_client's built-in process collector reads /proc (Linux only) - psutil works on macOS too.
+_proc = psutil.Process()
+Gauge("app_process_cpu_percent", "API process CPU, % of one core").set_function(lambda: _proc.cpu_percent(None))
+Gauge("app_process_rss_bytes", "API process resident memory").set_function(lambda: _proc.memory_info().rss)
 
 
 def current_user_id(x_user_id: int | None = Header(default=None)) -> int:

@@ -1,7 +1,9 @@
 from datetime import date
 
-from tasks.models import Status, Task
-from tasks.reports import completion_rate, count_by_status, overdue_tasks
+import pytest
+
+from tasks.models import Priority, Status, Task
+from tasks.reports import completion_rate, count_by_status, overdue_tasks, urgency
 
 
 def make_tasks():
@@ -30,3 +32,17 @@ def test_overdue_tasks():
     overdue = overdue_tasks(make_tasks(), today=date(2024, 1, 1))
     assert len(overdue) == 1
     assert overdue[0].id == 2
+
+
+TODAY = date(2024, 1, 10)
+
+
+@pytest.mark.parametrize("task, expected", [
+    (Task(1, "done", Priority.HIGH, Status.DONE, due_date=date(2024, 1, 1)), "none"),
+    (Task(2, "late", Priority.LOW, due_date=date(2024, 1, 9)), "critical"),
+    (Task(3, "high", Priority.HIGH), "high"),
+    (Task(4, "medium", Priority.MEDIUM), "normal"),
+    (Task(5, "low", Priority.LOW), "low"),
+])
+def test_urgency(task, expected):
+    assert urgency(task, TODAY) == expected

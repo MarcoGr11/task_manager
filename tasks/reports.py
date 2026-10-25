@@ -2,7 +2,7 @@
 from collections import Counter
 from datetime import date
 
-from .models import Status, Task
+from .models import Priority, Status, Task
 
 
 def count_by_status(tasks: list[Task]) -> dict[str, int]:
@@ -28,3 +28,16 @@ def tasks_by_tag(tasks: list[Task]) -> dict[str, list[Task]]:
         for tag in task.tags:
             grouped.setdefault(tag, []).append(task)
     return grouped
+
+
+def urgency(task: Task, today: date) -> str:
+    """Triage label for reports: how soon a task needs attention."""
+    if task.status == Status.DONE:
+        return "none"
+    if task.is_overdue(today):
+        return "critical"
+    if task.priority == Priority.HIGH:
+        return "high"
+    if task.priority == Priority.MEDIUM:
+        return "normal"
+    return "low"

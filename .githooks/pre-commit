@@ -1,8 +1,10 @@
 #!/bin/sh
 # Lab 3: block commits that contain secrets in staged changes.
+# Lab 6: block commits with too complex Python functions (complexity_check.sh, MAX_CC=10).
 # Enable once per clone:  git config core.hooksPath .githooks
 if ! command -v gitleaks >/dev/null 2>&1; then
   echo "pre-commit: gitleaks not installed (brew install gitleaks) - commit blocked" >&2
   exit 1
 fi
-exec gitleaks git --pre-commit --staged --redact --verbose --no-banner
+gitleaks git --pre-commit --staged --redact --verbose --no-banner || exit 1
+exec "$(dirname "$0")/complexity_check.sh"

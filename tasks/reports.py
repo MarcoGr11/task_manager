@@ -36,6 +36,15 @@ def urgency(task: Task, today: date) -> str:
         return "none"
     if task.is_overdue(today):
         return "critical"
+    if "blocker" in task.tags or "security" in task.tags or "incident" in task.tags:
+        return "critical"
+    if task.due_date is not None and (task.due_date - today).days <= 2 and task.priority != Priority.LOW:
+        return "critical"
+    if task.due_date is not None and (task.due_date - today).days <= 7 and (
+            task.priority == Priority.MEDIUM or task.status == Status.IN_PROGRESS):
+        return "high"
+    if task.status == Status.IN_PROGRESS and task.priority == Priority.LOW and "customer" in task.tags:
+        return "normal"
     if task.priority == Priority.HIGH:
         return "high"
     if task.priority == Priority.MEDIUM:

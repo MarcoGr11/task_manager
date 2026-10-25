@@ -171,8 +171,7 @@ def _consent_command(command, user_id: int, purpose: str, actor_id: int, corr_id
     if purpose not in PURPOSES:
         raise HTTPException(status_code=422, detail=f"Unknown consent purpose, allowed: {sorted(PURPOSES)}")
     authorize_subject(actor_id, user_id, corr_id, f"consent_{command.__name__}")
-    consents = consent_storage.load()
-    consent, changed = command(consents, user_id, purpose, source)
+    consents, consent, changed = command(consent_storage.load(), user_id, purpose, source)
     if changed:
         consent_storage.save(consents)
     _audit(f"consent_{command.__name__}", actor_id, user_id, "changed" if changed else "unchanged", corr_id)

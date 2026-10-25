@@ -30,23 +30,21 @@ def tasks_by_tag(tasks: list[Task]) -> dict[str, list[Task]]:
     return grouped
 
 
+# Lookup tables for urgency(). Keys are conditions on (task, today), values are labels;
+# conditions are checked top-down and the first true one wins, otherwise priority decides.
+URGENCY_RULES = {
+    lambda t, d: t.status == Status.DONE: "none",
+    lambda t, d: t.is_overdue(d): "critical",
+    lambda t, d: bool({"blocker", "security", "incident"}.intersection(t.tags)): "critical",
+    lambda t, d: t.due_date is not None and (t.due_date - d).days <= 2 and t.priority != Priority.LOW: "critical",
+    lambda t, d: (t.due_date is not None and (t.due_date - d).days <= 7
+                  and (t.priority == Priority.MEDIUM or t.status == Status.IN_PROGRESS)): "high",
+    lambda t, d: t.status == Status.IN_PROGRESS and t.priority == Priority.LOW and "customer" in t.tags: "normal",
+}
+PRIORITY_URGENCY = {Priority.HIGH: "high", Priority.MEDIUM: "normal", Priority.LOW: "low"}
+
+
 def urgency(task: Task, today: date) -> str:
     """Triage label for reports: how soon a task needs attention."""
-    if task.status == Status.DONE:
-        return "none"
-    if task.is_overdue(today):
-        return "critical"
-    if "blocker" in task.tags or "security" in task.tags or "incident" in task.tags:
-        return "critical"
-    if task.due_date is not None and (task.due_date - today).days <= 2 and task.priority != Priority.LOW:
-        return "critical"
-    if task.due_date is not None and (task.due_date - today).days <= 7 and (
-            task.priority == Priority.MEDIUM or task.status == Status.IN_PROGRESS):
-        return "high"
-    if task.status == Status.IN_PROGRESS and task.priority == Priority.LOW and "customer" in task.tags:
-        return "normal"
-    if task.priority == Priority.HIGH:
-        return "high"
-    if task.priority == Priority.MEDIUM:
-        return "normal"
-    return "low"
+    rule = next(filter(lambda condition: condition(task, today), URGENCY_RULES), None)
+    return URGENCY_RULES.get(rule, PRIORITY_URGENCY[task.priority])

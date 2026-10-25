@@ -1,0 +1,44 @@
+# Lab 7: complexity (radon) x churn (git log) -> hotspots.csv, all reports uploaded as an artifact.
+name: complexity
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  hotspots:
+    runs-on: ubuntu-latest
+    container: python:3.13
+    steps:
+      - name: Check git in container
+        run: git --version
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history, churn needs every commit
+
+      - name: Trust workspace (container runs as root, checkout dir belongs to the runner user)
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Install radon
+        run: pip install radon==6.0.1
+
+      - name: Complexity reports
+        run: |
+          mkdir -p reports
+          radon cc -j -s tasks > reports/complexity.json
+          radon hal -j tasks > reports/halstead.json
+          radon mi -j -s tasks > reports/mi.json
+
+      - name: Churn reports
+        run: |
+          git log --format=format: --name-only | egrep -v '^$' | sort | uniq -c | sort -nr > reports/churn_all.txt
+          git log --since="90 days ago" --format=format: --name-only | egrep -v '^$' | sort | uniq -c | sort -nr > reports/churn_90d.txt
+
+      - name: Hotspots matrix
+        run: python scripts/hotspots.py reports/complexity.json reports/churn_all.txt reports/hotspots.csv | tee reports/hotspots.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: complexity-reports
+          path: reports/

@@ -18,3 +18,6 @@ consents.json
 
 # Lab5: raw per-request k6 output (large), summaries are committed instead
 doc/lab5_results/*_k6_raw.csv*
+
+# Lab reports and evidence are kept locally, not published
+doc/

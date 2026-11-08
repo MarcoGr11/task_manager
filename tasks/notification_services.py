@@ -21,7 +21,7 @@ class BaseService:
     def is_running(self) -> bool:
         return self.running
 
-    def record(self, event: str, detail: str = "") -> None:
+    def record(self, event: str, detail: str = "", *, level: str) -> None:
         self.events.append(f"{event}:{detail}" if detail else event)
 
     def history(self) -> list[str]:

@@ -1,13 +1,13 @@
 """Public behaviour of the e-mail notification service across all its layers."""
 import pytest
 
-from tasks.notification_services import EmailNotificationService
+from tasks.notification_services import BaseService, EmailNotificationService, NotificationService
 
 SENDER = "noreply@example.com"
 
 
 def make_email(sender=SENDER):
-    return EmailNotificationService("mail", sender)
+    return EmailNotificationService(NotificationService(BaseService("mail"), "email"), sender)
 
 
 @pytest.fixture

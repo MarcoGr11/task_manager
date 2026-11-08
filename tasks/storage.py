@@ -17,8 +17,7 @@ class TaskStorage:
         raw = json.loads(self.path.read_text(encoding="utf-8"))
         return [Task.from_dict(item) for item in raw]
 
-    def save(self, tasks: list[Task], *, actor: str) -> None:
-        self.last_actor = actor
+    def save(self, tasks: list[Task]) -> None:
         data = [task.to_dict() for task in tasks]
         self.path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 

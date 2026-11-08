@@ -1,7 +1,10 @@
 """Aggregate statistics over a task list."""
+import csv
+import io
 from collections import Counter
 from datetime import date
 
+from .logging_utils import sanitize_text
 from .models import Priority, Status, Task
 
 
@@ -48,3 +51,12 @@ def urgency(task: Task, today: date) -> str:
     """Triage label for reports: how soon a task needs attention."""
     rule = next(filter(lambda condition: condition(task, today), URGENCY_RULES), None)
     return URGENCY_RULES.get(rule, PRIORITY_URGENCY[task.priority])
+
+
+def tasks_csv(tasks: list[Task], today: date) -> str:
+    """CSV with one sanitized row per task and its urgency label."""
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerow(["id", "title", "status", "urgency"])
+    writer.writerows([t.id, sanitize_text(t.title), t.status.value, urgency(t, today)] for t in tasks)
+    return buffer.getvalue()

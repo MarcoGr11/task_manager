@@ -9,11 +9,6 @@
 
 ## [Unreleased]
 
-### Виправлено
-
-- CI: крок markdownlint перевіряє лише `docs/**/*.md`, `README.md`, `CHANGELOG.md` (типовий glob action-у чіпляв `FINANCIAL_LEDGER.md`).
-- Мертве посилання `../architecture/deployment.md` у `local-setup.md` (навмисний FAIL-дефект ЛР11) прибрано.
-
 ## [docs-v2.0] - 2026-11-27
 
 ### Змінено (breaking)
@@ -40,6 +35,11 @@
 - Front matter (`owner`, `status`, `review_date`, `tags`) у кожній сторінці `docs/`. Додано `.github/CODEOWNERS` і `scripts/review_dates.py`.
 - `.github/workflows/docs.yml`: markdownlint, Spectral, review_date, `mkdocs build --strict`, GitHub Pages.
 - Змінна оточення `CORS_ALLOW_ORIGINS` (ISD §3), щоб Swagger UI на сайті міг звертатися до локального API.
+
+### Виправлено
+
+- CI: крок markdownlint перевіряє лише `docs/**/*.md`, `README.md`, `CHANGELOG.md` (типовий glob action-у чіпляв `FINANCIAL_LEDGER.md`).
+- Мертве посилання `../architecture/deployment.md` у `local-setup.md` (навмисний FAIL-дефект ЛР11) прибрано.
 
 ## [docs-v1.0] - 2026-11-27
 

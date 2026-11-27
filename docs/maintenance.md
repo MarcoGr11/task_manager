@@ -44,4 +44,4 @@
 |---|---|---|---|---|
 | 2026-11-27 | `0b6072c` | – (створено паспорт) | PASS, exit 0 | базова лінія |
 | 2026-11-27 | `ae1578c` | `GET /tasks/{task_id}`, `NOTIFIER_TIMEOUT_SECONDS` | FAIL, exit 1: маршрут не описано в README і SDD, змінну не описано в ISD | навмисна симуляція decay |
-| 2026-11-27 | PASS-коміт | – | PASS, exit 0 | оновлено README, SDD (C4, §3.5, §5), ISD §3, `.env.example`, ADR-0002 |
+| 2026-11-27 | `fa8b468` | – | PASS, exit 0 | оновлено README, SDD (C4, §3.5, §5), ISD §3, `.env.example`, ADR-0002 |

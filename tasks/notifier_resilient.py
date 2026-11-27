@@ -12,7 +12,7 @@ NOTIFIER_URL = os.getenv("NOTIFIER_URL", "http://localhost:9100/notify")
 MAX_ATTEMPTS = 3  # 1 call + 2 retries: bounded, so a failing notifier is never flooded
 BASE_DELAY_SECONDS = 0.2  # exponential backoff: 0.2s, then 0.4s
 MAX_JITTER_SECONDS = 0.1  # spreads retries of concurrent clients apart
-TIMEOUT_SECONDS = 1.0  # per attempt; worst case ~3 * 1.0 + 0.6 + 0.2 = 3.8s
+TIMEOUT_SECONDS = float(os.getenv("NOTIFIER_TIMEOUT_SECONDS", "1.0"))  # per attempt; worst case ~3 * 1.0 + 0.6 + 0.2 = 3.8s
 
 logger = logging.getLogger(__name__)
 _rng = random.SystemRandom()

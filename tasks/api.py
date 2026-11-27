@@ -89,6 +89,14 @@ def list_tasks() -> list[dict]:
     return [task.to_dict() for task in storage.load()]
 
 
+@app.get("/tasks/{task_id}")
+def get_task(task_id: int) -> dict:
+    task = next((t for t in storage.load() if t.id == task_id), None)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task.to_dict()
+
+
 @app.post("/tasks", status_code=201)
 def create_task(payload: TaskIn) -> dict:
     tasks = storage.load()

@@ -1,0 +1,51 @@
+# Spectral ruleset for docs/api/openapi.yaml (Lab 11).
+extends: ["spectral:oas"]
+rules:
+  # Every operation explains itself (built-in rule raised to error).
+  operation-description: error
+  operation-operationId: error
+  operation-tags: error
+
+  # Every named schema carries an example, so docs and SDK show real payloads.
+  schema-has-example:
+    description: Each schema in components.schemas must have an example.
+    severity: error
+    given: "$.components.schemas[*]"
+    then:
+      field: example
+      function: truthy
+
+  # Error responses (4xx/5xx) use the shared Error schema, directly or via components.responses.
+  error-uses-shared-schema:
+    description: 4xx/5xx JSON responses must reference components/schemas/Error.
+    severity: error
+    resolved: false
+    given: "$.paths[*][*].responses[?(@property.match(/^[45]/))].content['application/json'].schema"
+    then:
+      - field: $ref
+        function: truthy
+      - field: $ref
+        function: pattern
+        functionOptions:
+          match: "#/components/schemas/Error$"
+  error-responses-shared:
+    description: Shared responses in components.responses must use the Error schema.
+    severity: error
+    resolved: false
+    given: "$.components.responses[*].content['application/json'].schema"
+    then:
+      - field: $ref
+        function: truthy
+      - field: $ref
+        function: pattern
+        functionOptions:
+          match: "#/components/schemas/Error$"
+
+  # Operations with path or header input must declare 422 (FastAPI validation).
+  validation-error-declared:
+    description: Operations with parameters or a request body must document 422.
+    severity: warn
+    given: "$.paths[*][?(@.parameters || @.requestBody)].responses"
+    then:
+      field: "422"
+      function: truthy

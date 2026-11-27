@@ -16,14 +16,17 @@ from pathlib import Path
 CODE_DIR = "tasks"
 SUSPICIOUS, STALE, DRIFT = 90, 180, 20
 CARRIERS = [
-    "README.md", "docs/sdd.md", "docs/isd.md", "docs/maintenance.md", "docs/handover.md",
+    "README.md", "docs/api/openapi.yaml", "docs/architecture/sdd.md", "docs/architecture/isd.md",
+    "docs/developer/maintenance.md", "docs/developer/handover.md", "docs/developer/CONTRIBUTING.md",
     "docs/architecture/adr/0001-json-file-storage.md", "docs/architecture/adr/0002-notifier-retry-fallback.md",
+    "docs/architecture/adr/0003-openapi-as-source-of-truth.md", "docs/architecture/adr/0004-docs-as-code-mkdocs.md",
+    "mkdocs.yml", ".github/workflows/docs.yml",
     "FINANCIAL_LEDGER.md", ".github/workflows/complexity.yml", ".githooks/pre-commit", ".githooks/complexity_check.sh",
     "docker-compose.monitoring.yml", "docker-compose.sonar.yml", "monitoring/prometheus.yml",
     "sonar-project.properties", "pytest.ini", ".env.example", ".gitleaks.toml", "requirements.txt",
 ]
 # Documents that describe the tasks/ code and therefore must follow it.
-LIVING = {"README.md", "docs/sdd.md", "docs/isd.md"}
+LIVING = {"docs/api/openapi.yaml", "docs/architecture/sdd.md", "docs/architecture/isd.md"}
 ROUTE = re.compile(r'@app\.(get|post|put|patch|delete)\("([^"]+)"')
 ENV = re.compile(r'getenv\("([A-Z_]+)"')
 
@@ -91,10 +94,11 @@ def dead_links() -> None:
 
 
 def coverage() -> bool:
-    print("\n## 5. Покриття коду документацією (маршрути tasks/api.py, змінні оточення tasks/)")
+    print("\n## 5. Покриття коду документацією (маршрути tasks/api.py -> openapi.yaml, змінні оточення tasks/ -> ISD)")
     code = "".join(p.read_text(encoding="utf-8") for p in Path(CODE_DIR).glob("*.py"))
-    checks = [(f"{m} {p}", p, ("README.md", "docs/sdd.md")) for m, p in ROUTE.findall(Path("tasks/api.py").read_text(encoding="utf-8"))]
-    checks += [(f"env {v}", v, ("docs/isd.md",)) for v in sorted(set(ENV.findall(code)))]
+    routes = ROUTE.findall(Path("tasks/api.py").read_text(encoding="utf-8"))
+    checks = [(f"{m} {p}", f"\n  {p}:", ("docs/api/openapi.yaml",)) for m, p in routes]
+    checks += [(f"env {v}", v, ("docs/architecture/isd.md",)) for v in sorted(set(ENV.findall(code)))]
     failed = False
     for label, needle, docs in checks:
         missing = [d for d in docs if not Path(d).exists() or needle not in Path(d).read_text(encoding="utf-8")]

@@ -8,6 +8,7 @@ from pathlib import Path
 
 import psutil
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import Gauge
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, Field
@@ -31,6 +32,10 @@ user_storage = UserStorage(Path(os.getenv("USERS_DB", "users.json")))
 consent_storage = ConsentStorage(Path(os.getenv("CONSENTS_DB", "consents.json")))
 app = FastAPI(title="Task Manager API")
 Instrumentator().instrument(app).expose(app)  # GET /metrics: request count/latency histograms
+# Off by default; set e.g. CORS_ALLOW_ORIGINS=http://127.0.0.1:8001 so the docs site's Swagger UI can call the API.
+_cors_origins = [o for o in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if o]
+if _cors_origins:
+    app.add_middleware(CORSMiddleware, allow_origins=_cors_origins, allow_methods=["*"], allow_headers=["*"])
 
 # prometheus_client's built-in process collector reads /proc (Linux only) - psutil works on macOS too.
 _proc = psutil.Process()

@@ -1,3 +1,12 @@
+---
+title: "Матриця рішень по носіях (ЛР10)"
+owner: MarcoGr11
+status: published
+review_date: 2027-02-25
+tags:
+  - audit
+---
+
 # Матриця рішень по носіях знань
 
 Дата: 2026-11-27. Підстава: `docs/audit/inventory.md`, `docs/audit/decay_metrics.txt`.
@@ -20,3 +29,5 @@
 | `FINANCIAL_LEDGER.md` | Процесний артефакт Лаби 9, не про систему | **deprecated** (для онбордингу) | Не включати в онбординг. Позначити в handover як артефакт процесу. |
 | Docstrings `tasks/*.py` | 19 з 20 модулів | залишити | Правило «зміна коду = зміна документації» в `docs/maintenance.md`. |
 | Повідомлення комітів | 19 з 54 у Conventional Commits | **оновити** (надалі) | Нові коміти тільки у форматі `type(scope): ...`. |
+
+Знімок аудиту ЛР10 на 2026-11-27: шляхи `docs/sdd.md`, `docs/isd.md` у тексті відповідають тодішній структурі. Пов'язані: [[audit/inventory]], [[developer/handover]].

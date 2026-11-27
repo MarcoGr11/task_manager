@@ -21,3 +21,8 @@ doc/lab5_results/*_k6_raw.csv*
 
 # Lab reports and evidence are kept locally, not published
 doc/
+
+# Lab 11: built docs site and generated SDK (regenerated, never edited by hand)
+site/
+sdk-client/
+.schemathesis/

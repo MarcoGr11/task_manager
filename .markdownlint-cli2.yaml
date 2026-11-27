@@ -1,0 +1,20 @@
+# markdownlint rules for docs/, README.md, CHANGELOG.md.
+config:
+  default: true
+  MD007:
+    indent: 4         # Python-Markdown (MkDocs) needs 4 spaces for nested lists
+  MD013: false        # long table rows and prose lines are allowed
+  MD033:              # inline HTML only where the toolchain needs it
+    allowed_elements: [a, swagger-ui, meta, br]
+  MD041: false        # front matter title replaces the first-line heading rule
+  MD024:
+    siblings_only: true
+  MD025:
+    front_matter_title: ""   # title in front matter is metadata, the page keeps its own H1
+globs:
+  - "docs/**/*.md"
+  - "README.md"
+  - "CHANGELOG.md"
+ignores:
+  - "site/**"
+  - "sdk-client/**"

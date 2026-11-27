@@ -1,0 +1,85 @@
+site_name: Task Manager
+site_description: Documentation as Code для task_manager
+site_url: https://marcogr11.github.io/task_manager/
+repo_url: https://github.com/MarcoGr11/task_manager
+edit_uri: edit/master/docs/
+docs_dir: docs
+
+theme:
+  name: material
+  language: uk
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - content.code.copy
+
+# Піраміда документації: 1 огляд, 2 розробник, 3 API, 4 архітектура.
+nav:
+  - "1. Огляд": index.md
+  - "2. Розробник":
+      - developer/index.md
+      - developer/CONTRIBUTING.md
+      - developer/local-setup.md
+      - developer/standards.md
+      - developer/maintenance.md
+      - developer/handover.md
+  - "3. API":
+      - api/index.md
+      - api/reference.md
+      - api/drift.md
+  - "4. Архітектура":
+      - architecture/index.md
+      - architecture/sdd.md
+      - architecture/isd.md
+      - ADR:
+          - architecture/adr/index.md
+          - architecture/adr/0001-json-file-storage.md
+          - architecture/adr/0002-notifier-retry-fallback.md
+          - architecture/adr/0003-openapi-as-source-of-truth.md
+          - architecture/adr/0004-docs-as-code-mkdocs.md
+  - Аудит (ЛР10):
+      - audit/inventory.md
+      - audit/verdicts.md
+      - audit/audience_matrix.md
+  - Теги: tags.md
+
+plugins:
+  - search:
+      lang: uk
+  - tags
+  - ezlinks
+  - mermaid2
+  - git-revision-date-localized:
+      type: date
+      fallback_to_build_date: true
+  - swagger-ui-tag
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            show_source: false
+            members_order: source
+
+markdown_extensions:
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid_custom
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+
+# Deprecated stubs at the pre-Lab-11 paths: kept for old links, redirect to the new pages.
+not_in_nav: |
+  /sdd.md
+  /isd.md
+  /maintenance.md
+  /handover.md

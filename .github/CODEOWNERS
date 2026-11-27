@@ -1,0 +1,7 @@
+# Every change under docs/ (and the files the docs site is built from) needs the owner's review.
+/docs/                     @MarcoGr11
+/mkdocs.yml                @MarcoGr11
+/.spectral.yaml            @MarcoGr11
+/.github/workflows/docs.yml @MarcoGr11
+/README.md                 @MarcoGr11
+/CHANGELOG.md              @MarcoGr11

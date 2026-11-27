@@ -1,0 +1,454 @@
+openapi: 3.0.3
+info:
+  title: Task Manager API
+  version: 1.0.1
+  description: |
+    Контракт HTTP API сервісу task_manager. Цей файл є єдиним джерелом правди (SSOT) для API,
+    див. ADR-0003. Маршрути `/api/users/{user_id}/...` використовують auth-заглушку `X-User-Id`
+    (навчальний проєкт, не продакшн-механізм).
+  license:
+    name: Навчальний проєкт, ліцензію не визначено
+servers:
+  - url: http://localhost:8000
+    description: Локальний dev-сервер (uvicorn tasks.api:app --port 8000)
+tags:
+  - name: service
+    description: Службові маршрути
+  - name: tasks
+    description: Задачі
+  - name: users
+    description: Користувачі та персональні дані
+  - name: consents
+    description: Згоди на обробку даних
+
+paths:
+  /health:
+    get:
+      operationId: health
+      tags: [service]
+      summary: Перевірка живості
+      description: Повертає статус процесу без звернення до сховища.
+      responses:
+        "200":
+          description: Процес працює
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+              example: { status: ok }
+
+  /metrics:
+    get:
+      operationId: metrics
+      tags: [service]
+      summary: Метрики Prometheus
+      description: Лічильники та гістограми запитів (prometheus-fastapi-instrumentator) і gauge app_process_cpu_percent, app_process_rss_bytes.
+      responses:
+        "200":
+          description: Метрики у текстовому форматі Prometheus
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "app_process_rss_bytes 1.2e+08"
+
+  /tasks:
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      summary: Список задач
+      description: Повертає всі задачі з TASKS_DB. Пріоритет у відповіді подано іменем.
+      responses:
+        "200":
+          description: Масив задач
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Task" }
+              example:
+                - { id: 1, title: Написати звіт, priority: HIGH, status: todo, due_date: null, tags: [], owner_id: null }
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: Створити задачу
+      description: |
+        Зберігає задачу і синхронно сповіщає нотифікатор (до 3 спроб, ADR-0002). Збій нотифікатора
+        не ламає створення: відповідь 201 з notification_delivered=false.
+        Пріоритет у запиті передається числом 1-3, у відповіді повертається іменем.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskCreate" }
+            example: { title: Написати звіт, priority: 3 }
+      responses:
+        "201":
+          description: Задачу створено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskCreated" }
+              example: { id: 1, title: Написати звіт, priority: HIGH, status: todo, due_date: null, tags: [], owner_id: null, notification_delivered: true, notification_attempts: 1 }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /tasks/{task_id}:
+    get:
+      operationId: getTask
+      tags: [tasks]
+      summary: Одна задача за id
+      description: Повертає задачу з указаним id (додано в ЛР10, коміт ae1578c).
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "200":
+          description: Задача знайдена
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+              example: { id: 2, title: B, priority: HIGH, status: todo, due_date: null, tags: [], owner_id: null }
+        "404":
+          description: Задачі з таким id немає
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { detail: Task not found }
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/users:
+    post:
+      operationId: registerUser
+      tags: [users]
+      summary: Реєстрація користувача
+      description: Створює користувача. Пароль зберігається як pbkdf2_sha256 і ніколи не повертається.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserCreate" }
+            example: { name: Alice Example, email: alice@example.com, phone: "+380501234567", password: correct-horse-1 }
+      responses:
+        "201":
+          description: Користувача створено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserId" }
+              example: { id: 4 }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/users/{user_id}/personal-data:
+    get:
+      operationId: exportPersonalData
+      tags: [users]
+      summary: Експорт персональних даних
+      description: Експорт профілю, налаштувань, власних задач і згод суб'єкта. Лише сам суб'єкт.
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/XUserId"
+        - $ref: "#/components/parameters/XCorrelationId"
+      responses:
+        "200":
+          description: Експорт
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PersonalDataExport" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /api/users/{user_id}/anonymize:
+    post:
+      operationId: anonymizeUser
+      tags: [users]
+      summary: Анонімізація (Right to Erasure)
+      description: Анонімізує профіль і згоди одним записом (all-or-nothing). Дозволено суб'єкту або адміну.
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/XUserId"
+        - $ref: "#/components/parameters/XCorrelationId"
+      responses:
+        "200":
+          description: Профіль анонімізовано (або вже був анонімізований)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnonymizeResult" }
+              example: { subject_id: 1, status: anonymized, anonymized_at: "2026-11-27T10:00:00+00:00" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "500":
+          description: Помилка запису, жодних змін не застосовано
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { detail: "Anonymization failed, no changes applied" }
+
+  /api/users/{user_id}/consents/{purpose}/grant:
+    post:
+      operationId: grantConsent
+      tags: [consents]
+      summary: Надати згоду
+      description: Надає згоду для мети за поточною версією політики і записує подію в history.
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/Purpose"
+        - $ref: "#/components/parameters/Source"
+        - $ref: "#/components/parameters/XUserId"
+        - $ref: "#/components/parameters/XCorrelationId"
+      responses:
+        "200":
+          description: Поточний стан згоди
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Consent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /api/users/{user_id}/consents/{purpose}/revoke:
+    post:
+      operationId: revokeConsent
+      tags: [consents]
+      summary: Відкликати згоду
+      description: Відкликає згоду. Якщо згоди не було, повертає is_granted=false без запису.
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/Purpose"
+        - $ref: "#/components/parameters/Source"
+        - $ref: "#/components/parameters/XUserId"
+        - $ref: "#/components/parameters/XCorrelationId"
+      responses:
+        "200":
+          description: Поточний стан згоди
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Consent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /api/users/{user_id}/send-marketing-email:
+    post:
+      operationId: sendMarketingEmail
+      tags: [consents]
+      summary: Маркетинговий лист за наявності згоди
+      description: Policy Gate перевіряє дійсну згоду MARKETING_EMAIL безпосередньо перед відправкою.
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/XUserId"
+        - $ref: "#/components/parameters/XCorrelationId"
+      responses:
+        "200":
+          description: Лист дозволено і відправлено (імітація)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MarketingDecision" }
+              example: { decision: ALLOW, sent: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+components:
+  parameters:
+    TaskId:
+      name: task_id
+      in: path
+      required: true
+      description: Ідентифікатор задачі
+      schema: { type: integer, example: 2 }
+    UserId:
+      name: user_id
+      in: path
+      required: true
+      description: Ідентифікатор суб'єкта даних
+      schema: { type: integer, example: 1 }
+    Purpose:
+      name: purpose
+      in: path
+      required: true
+      description: Мета обробки даних
+      schema: { $ref: "#/components/schemas/Purpose" }
+    Source:
+      name: source
+      in: query
+      required: false
+      description: Канал, через який отримано рішення
+      schema: { type: string, default: api, example: settings_page }
+    XUserId:
+      name: X-User-Id
+      in: header
+      required: false
+      description: Auth-заглушка, id того, хто діє. Без заголовка 401.
+      schema: { type: integer, example: 1 }
+    XCorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: Id кореляції для аудиту; без нього генерується
+      schema: { type: string, example: 3f2b9c1e }
+
+  responses:
+    ValidationFailed:
+      description: Запит не пройшов валідацію
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { detail: [{ type: int_parsing, loc: [path, task_id], msg: "Input should be a valid integer, unable to parse string as an integer", input: abc }] }
+    BadRequest:
+      description: Тіло запиту не є коректним JSON
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { detail: There was an error parsing the body }
+    Unauthorized:
+      description: Немає заголовка X-User-Id
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { detail: Not authenticated }
+    Forbidden:
+      description: Доступ заборонено (однаково для чужого і неіснуючого id)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { detail: Forbidden }
+
+  schemas:
+    Error:
+      type: object
+      description: Спільна схема помилки. detail є рядком для 4xx/5xx від обробника і масивом для помилок валідації FastAPI.
+      required: [detail]
+      properties:
+        detail:
+          oneOf:
+            - type: string
+            - type: array
+              items: { $ref: "#/components/schemas/ValidationIssue" }
+      example: { detail: Task not found }
+    ValidationIssue:
+      type: object
+      required: [loc, msg, type]
+      properties:
+        loc:
+          type: array
+          items: { oneOf: [{ type: string }, { type: integer }] }
+        msg: { type: string }
+        type: { type: string }
+      example: { loc: [body, title], msg: "String should have at least 1 character", type: string_too_short }
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [ok] }
+      example: { status: ok }
+    Priority:
+      type: string
+      enum: [LOW, MEDIUM, HIGH]
+      example: HIGH
+    Status:
+      type: string
+      enum: [todo, in_progress, done]
+      example: todo
+    Purpose:
+      type: string
+      enum: [MARKETING_EMAIL, OPTIONAL_ANALYTICS]
+      example: MARKETING_EMAIL
+    Task:
+      type: object
+      required: [id, title, priority, status, due_date, tags, owner_id]
+      properties:
+        id: { type: integer, example: 1 }
+        title: { type: string, example: Написати звіт }
+        priority: { $ref: "#/components/schemas/Priority" }
+        status: { $ref: "#/components/schemas/Status" }
+        due_date: { type: string, nullable: true, format: date, example: "2026-12-01" }
+        tags: { type: array, items: { type: string }, example: [lab] }
+        owner_id: { type: integer, nullable: true, example: 1 }
+      example: { id: 1, title: Написати звіт, priority: HIGH, status: todo, due_date: null, tags: [], owner_id: null }
+    TaskCreate:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, example: Написати звіт }
+        priority:
+          type: integer
+          enum: [1, 2, 3]
+          default: 2
+          description: 1 = LOW, 2 = MEDIUM, 3 = HIGH
+          example: 3
+      example: { title: Написати звіт, priority: 3 }
+    TaskCreated:
+      allOf:
+        - $ref: "#/components/schemas/Task"
+        - type: object
+          required: [notification_delivered, notification_attempts]
+          properties:
+            notification_delivered: { type: boolean, example: true }
+            notification_attempts: { type: integer, minimum: 1, maximum: 3, example: 1 }
+      example: { id: 1, title: Написати звіт, priority: HIGH, status: todo, due_date: null, tags: [], owner_id: null, notification_delivered: false, notification_attempts: 3 }
+    UserCreate:
+      type: object
+      required: [name, email, phone, password]
+      properties:
+        name: { type: string, minLength: 1, example: Alice Example }
+        email: { type: string, description: Має містити @ і бути унікальним, example: alice@example.com }
+        phone: { type: string, example: "+380501234567" }
+        password: { type: string, minLength: 8, format: password, example: correct-horse-1 }
+      example: { name: Alice Example, email: alice@example.com, phone: "+380501234567", password: correct-horse-1 }
+    UserId:
+      type: object
+      required: [id]
+      properties:
+        id: { type: integer, example: 4 }
+      example: { id: 4 }
+    Consent:
+      type: object
+      required: [user_id, purpose, is_granted]
+      properties:
+        user_id: { type: integer, example: 1 }
+        purpose: { $ref: "#/components/schemas/Purpose" }
+        is_granted: { type: boolean, example: true }
+        policy_version: { type: string, example: "2026-09" }
+        granted_at: { type: string, nullable: true, example: "2026-11-27T10:00:00+00:00" }
+        withdrawn_at: { type: string, nullable: true, example: null }
+        source: { type: string, example: api }
+        updated_at: { type: string, nullable: true, example: "2026-11-27T10:00:00+00:00" }
+        history:
+          type: array
+          items: { type: object }
+          example: [{ action: grant, at: "2026-11-27T10:00:00+00:00", policy_version: "2026-09", source: api }]
+      example: { user_id: 1, purpose: MARKETING_EMAIL, is_granted: true, policy_version: "2026-09", granted_at: "2026-11-27T10:00:00+00:00", withdrawn_at: null, source: api, updated_at: "2026-11-27T10:00:00+00:00", history: [] }
+    PersonalDataExport:
+      type: object
+      required: [export_metadata, profile, settings, activity, consents]
+      properties:
+        export_metadata: { type: object, example: { subject_id: 1, categories: [profile, settings, activity, consents] } }
+        profile: { type: object, example: { id: 1, name: Alice Example, email: alice@example.com, phone: "+380501234567" } }
+        settings: { type: object, example: { marketing_opt_in_source: signup_form } }
+        activity:
+          type: object
+          properties:
+            tasks: { type: array, items: { $ref: "#/components/schemas/Task" } }
+          example: { tasks: [] }
+        consents: { type: array, items: { $ref: "#/components/schemas/Consent" } }
+      example: { export_metadata: { subject_id: 1 }, profile: { id: 1 }, settings: {}, activity: { tasks: [] }, consents: [] }
+    AnonymizeResult:
+      type: object
+      required: [subject_id, status, anonymized_at]
+      properties:
+        subject_id: { type: integer, example: 1 }
+        status: { type: string, enum: [anonymized], example: anonymized }
+        anonymized_at: { type: string, example: "2026-11-27T10:00:00+00:00" }
+      example: { subject_id: 1, status: anonymized, anonymized_at: "2026-11-27T10:00:00+00:00" }
+    MarketingDecision:
+      type: object
+      required: [decision, sent]
+      properties:
+        decision: { type: string, enum: [ALLOW], example: ALLOW }
+        sent: { type: boolean, example: true }
+      example: { decision: ALLOW, sent: true }

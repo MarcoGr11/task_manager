@@ -8,7 +8,7 @@ import httpx
 
 NOTIFIER_URL = os.getenv("NOTIFIER_URL", "http://localhost:9100/notify")
 
-# Resilience parameters, rationale in README_LAB2.md.
+# Resilience parameters, rationale in docs/architecture/adr/0002-notifier-retry-fallback.md.
 MAX_ATTEMPTS = 3  # 1 call + 2 retries: bounded, so a failing notifier is never flooded
 BASE_DELAY_SECONDS = 0.2  # exponential backoff: 0.2s, then 0.4s
 MAX_JITTER_SECONDS = 0.1  # spreads retries of concurrent clients apart

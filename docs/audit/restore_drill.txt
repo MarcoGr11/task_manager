@@ -1,0 +1,14 @@
+$ python -m tasks.seed_users   # TASKS_DB/USERS_DB/CONSENTS_DB -> $D
+Seeded 3 users, 5 tasks
+$ ls $D
+consents.json
+tasks.json
+users.json
+$ mkdir -p $D/backup && cp -p $D/*.json $D/backup/
+$ rm "${D:?}"/*.json   # імітація втрати даних
+backup
+$ time (cp -p $D/backup/*.json $D/ && python -c <перевірка кількості записів>)
+tasks 5 users 3 consents 0
+real 0.39
+user 0.25
+sys 0.06

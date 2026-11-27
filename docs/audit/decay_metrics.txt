@@ -1,0 +1,92 @@
+# Documentation decay audit, HEAD d0fa985
+
+## 1. Вік носіїв (сьогодні 2026-11-27; >90 підозрілий, >180 застарілий)
+Команди на кожен файл: git log -1 --format=%cs -- <file>; git log --oneline <last>..HEAD -- tasks | wc -l
+файл                                                    остання     днів  стан             код після
+README.md                                               -              -  відсутній у git    25
+docs/sdd.md                                             -              -  відсутній у git    25
+docs/isd.md                                             -              -  відсутній у git    25
+docs/maintenance.md                                     -              -  відсутній у git    25
+docs/handover.md                                        -              -  відсутній у git    25
+docs/architecture/adr/0001-json-file-storage.md         -              -  відсутній у git    25
+docs/architecture/adr/0002-notifier-retry-fallback.md   -              -  відсутній у git    25
+FINANCIAL_LEDGER.md                                     2026-11-08    19  ok                  0
+.github/workflows/complexity.yml                        2026-10-25    33  ok                  8
+.githooks/pre-commit                                    2026-10-25    33  ok                  8
+.githooks/complexity_check.sh                           2026-10-25    33  ok                  8
+docker-compose.monitoring.yml                           2026-10-18    40  ok                 11
+docker-compose.sonar.yml                                2026-09-13    75  ok                 24
+monitoring/prometheus.yml                               2026-10-18    40  ok                 11
+sonar-project.properties                                2026-11-08    19  ok                  5
+pytest.ini                                              2026-09-13    75  ok                 24
+.env.example                                            2026-10-11    47  ok                 18
+.gitleaks.toml                                          2026-10-11    47  ok                 16
+requirements.txt                                        2026-10-18    40  ok                 11
+
+## 2. Code-Doc Change Ratio
+$ git log --oneline -- tasks | wc -l
+25
+$ git log --oneline -- '*.md' docs | wc -l
+1
+Ratio code:doc = 25:1 = 25.0
+
+## 3. Порожні коміти з 'docs' у повідомленні (документ обіцяно, файлів у дереві немає)
+2227c15 2026-10-25 Lab7 docs: git graph (FAIL -> PASS)
+ac3b0af 2026-10-25 Lab7 Task 3 docs: CI run log, downloaded artifact, hotspots report
+2f6548e 2026-10-25 Lab6 docs: final git graph
+1fc4544 2026-10-25 Lab6 docs: report (Halstead, CFG/CC FAIL->PASS, complexity pre-commit gate) + hook evidence
+616ef3d 2026-10-25 docs(audit): CFG of urgency baseline (CC=5) and planned extension (CC_theory=9) before coding
+d06d974 2026-10-25 chore(docs): move lab 2-4 docs and evidence into doc/
+bb095cb 2026-10-11 Lab3 docs: report with SonarQube S3776 before/after, radon, regression and gitleaks evidence
+4e06c87 2026-10-11 Lab4 docs: report (PII inventory, policies, evidence, conclusions)
+8f432e3 2026-09-27 Lab2 docs: run guide, report, k6/fault-injection/pytest results
+Разом: 9
+
+## 4. Посилання з коду на файли документації
+tasks/notifier_resilient.py:11:# Resilience parameters, rationale in README_LAB2.md.
+  -> README_LAB2.md: DEAD (немає в git)
+
+## 5. Покриття коду документацією (маршрути tasks/api.py, змінні оточення tasks/)
+get /health                                             НЕМАЄ в README.md, docs/sdd.md
+get /tasks                                              НЕМАЄ в README.md, docs/sdd.md
+post /tasks                                             НЕМАЄ в README.md, docs/sdd.md
+post /api/users                                         НЕМАЄ в README.md, docs/sdd.md
+get /api/users/{user_id}/personal-data                  НЕМАЄ в README.md, docs/sdd.md
+post /api/users/{user_id}/anonymize                     НЕМАЄ в README.md, docs/sdd.md
+post /api/users/{user_id}/consents/{purpose}/grant      НЕМАЄ в README.md, docs/sdd.md
+post /api/users/{user_id}/consents/{purpose}/revoke     НЕМАЄ в README.md, docs/sdd.md
+post /api/users/{user_id}/send-marketing-email          НЕМАЄ в README.md, docs/sdd.md
+env CONSENTS_DB                                         НЕМАЄ в docs/isd.md
+env NOTIFIER_URL                                        НЕМАЄ в docs/isd.md
+env TASKS_DB                                            НЕМАЄ в docs/isd.md
+env USERS_DB                                            НЕМАЄ в docs/isd.md
+
+## 6. Access Evidence
+$ gh api repos/MarcoGr11/task_manager/traffic/popular/paths 2>/dev/null
+[{"path":"/MarcoGr11/task_manager","title":"Overview","count":1,"uniques":1}]
+Перегляди .md-файлів на GitHub за 14 днів: не зафіксовано. Хто реально читає документацію: потребує підтвердження студента.
+
+## Вердикт: FAIL
+
+## 7. Локальні (не в git) носії
+$ ls doc
+k6 lab2_results lab3_results lab4_results lab5 lab5_results lab6 lab6_results lab7 lab7_results lab8 lab8_results lab9 lab9_results 
+$ ls doc | grep -cE '^README_LAB|\.zip$'
+0
+$ grep -n '^doc/' .gitignore
+20:doc/lab5_results/*_k6_raw.csv*
+23:doc/
+$ git log -1 --format='%h %cs %s' -- .gitignore
+7eb7aee 2026-10-25 chore: keep lab reports (doc/) local, out of the repository
+$ stat -f '%Sm %N' -t %F ~/Downloads/task_manager/README_LAB.md
+2026-09-13 /Users/admin/Downloads/task_manager/README_LAB.md
+$ head -3 ~/Downloads/task_manager/README_LAB.md
+# Лаб. робота №1 — покроковий план (Task Manager + SonarQube)
+
+Проєкт вже містить git-історію з трьома станами, які вимагає лаба:
+$ git -C ~/Downloads/task_manager log -1 --format='%h %cs %s'
+47dd09a 2026-09-13 Refactor legacy_import: remove duplication, simplify classify_row with guard clauses, drop eval()
+
+## 8. Docstrings модулів tasks/
+$ python -c "ast: модулі без docstring"
+модулів: 20, без module docstring: 1: __init__.py

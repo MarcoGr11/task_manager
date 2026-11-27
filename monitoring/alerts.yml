@@ -1,0 +1,48 @@
+# Alert catalog as Prometheus rules (docs/runbooks/index.md). Severity: SEV1 critical .. SEV3 low.
+# Metrics come from GET /metrics of tasks.api (prometheus-fastapi-instrumentator + gauges in tasks/api.py).
+groups:
+  - name: task_manager
+    rules:
+      - alert: TaskStoreReadErrors
+        expr: |
+          sum(rate(http_requests_total{job="task_manager",handler=~"/tasks.*",status="5xx"}[5m]))
+            / sum(rate(http_requests_total{job="task_manager",handler=~"/tasks.*"}[5m])) > 0.05
+        for: 2m
+        labels: {severity: SEV1, role: SRE on-call}
+        annotations:
+          summary: ">5% of /tasks requests fail with 5xx for 2 min (unreadable or corrupted TASKS_DB)"
+          runbook_url: docs/runbooks/RB-001.md#t1
+      - alert: TaskStoreShrink
+        expr: |
+          task_store_records{job="task_manager"} < 0.9 * max_over_time(task_store_records{job="task_manager"}[15m])
+            or (task_store_records{job="task_manager"} != task_store_records{job="task_manager"})
+        for: 1m
+        labels: {severity: SEV2, role: SRE on-call}
+        annotations:
+          summary: "Task count dropped by >10% within 15 min, or the store is unreadable (NaN): data loss"
+          runbook_url: docs/runbooks/RB-001.md#t2
+      - alert: AvailabilityBudgetFastBurn
+        expr: |
+          (1 - sum(rate(http_requests_total{job="task_manager",status="2xx"}[1h]))
+                / sum(rate(http_requests_total{job="task_manager",status!="4xx"}[1h]))) > 14.4 * 0.005
+        for: 5m
+        labels: {severity: SEV2, role: SRE on-call}
+        annotations:
+          summary: "Availability SLO (99.5%) error budget burns 14.4x faster than allowed (2% of 30-day budget per hour)"
+          runbook_url: docs/runbooks/RB-001.md#t1
+      - alert: LatencySLOBreach
+        expr: |
+          sum(rate(http_request_duration_seconds_bucket{job="task_manager",handler=~"/tasks.*",le="0.3"}[10m]))
+            / sum(rate(http_request_duration_seconds_count{job="task_manager",handler=~"/tasks.*"}[10m])) < 0.95
+        for: 10m
+        labels: {severity: SEV3, role: L2 developer}
+        annotations:
+          summary: "p95 of /tasks latency above 300 ms for 10 min (latency SLO, docs/slo.yaml)"
+          runbook_url: docs/maintenance-plan.md#known-issues
+      - alert: ApiDown
+        expr: up{job="task_manager"} == 0
+        for: 1m
+        labels: {severity: SEV1, role: SRE on-call}
+        annotations:
+          summary: "Prometheus cannot scrape /metrics: API process down"
+          runbook_url: docs/maintenance-plan.md#escalation

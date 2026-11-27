@@ -1,0 +1,67 @@
+# SLI / SLO / SLA of task_manager. Single source for docs/slo.md, monitoring/alerts.yml and docs/maintenance-plan.md.
+# Percentages are of "valid events" in a rolling window. Error budget = (100% - SLO) x window minutes.
+service: task_manager
+version: 1.0.0
+owner: MarcoGr11
+review_date: 2027-02-25
+window_days: 30
+measurement:
+  source: Prometheus scrape of GET /metrics every 5 s (monitoring/prometheus.yml, job task_manager)
+  rules: monitoring/alerts.yml
+  current_values: >-
+    model, not measured over 30 days: Prometheus keeps no history between runs (no volume, docs/architecture/isd.md#isd-monitoring).
+    Baseline comes from the Lab 5 load tests (doc/lab5_results/summary.md) and the Lab 2 fault injection.
+slis:
+  - id: availability
+    name: Частка успішних HTTP-відповідей
+    definition: >-
+      Кількість відповідей 2xx, поділена на кількість усіх відповідей без 4xx, за 30 днів.
+      4xx виключено: це помилки клієнта (валідація 422, 401, 403, 404), а не відмова сервісу.
+      Усі обробники, крім /metrics.
+    good: 'sum(increase(http_requests_total{job="task_manager",handler!="/metrics",status="2xx"}[30d]))'
+    valid: 'sum(increase(http_requests_total{job="task_manager",handler!="/metrics",status!="4xx"}[30d]))'
+    slo: 99.5
+    sla: 99.0
+    current_model: 100.0
+    current_basis: Lab 5 step load 10-60 RPS, 0.00% errors (doc/lab5_results/summary.md)
+  - id: latency_p95
+    name: p95 латентності /tasks* < 300 мс
+    definition: >-
+      Частка запитів до обробників /tasks і /tasks/{task_id} (GET і POST), що обслужені за 300 мс або швидше
+      (кошик le="0.3" гістограми http_request_duration_seconds), за 30 днів.
+      SLO 95% означає те саме, що p95 < 300 мс.
+    good: 'sum(increase(http_request_duration_seconds_bucket{job="task_manager",handler=~"/tasks.*",le="0.3"}[30d]))'
+    valid: 'sum(increase(http_request_duration_seconds_count{job="task_manager",handler=~"/tasks.*"}[30d]))'
+    threshold_ms: 300
+    slo: 95.0
+    sla: 90.0
+    sla_note: SLA за тим самим порогом 300 мс, але дозволяє 10% повільних запитів (p90).
+    current_model: 95.0
+    current_basis: >-
+      GET /tasks p95 24.6-30.1 ms at 10-60 RPS (Lab 5), but POST /tasks waits for the notifier synchronously:
+      0.77 s on 503 and 3.81 s on timeout (Lab 2 fault_after.txt). The model assumes about 5% degraded POSTs.
+  - id: background_notifications
+    name: Частка успішних фонових задач (доставка нотифікацій)
+    definition: >-
+      Кількість нотифікацій «задачу створено», доставлених нотифікатору, поділена на кількість створених задач, за 30 днів.
+      Подія valid = кожен успішний POST /tasks (201). Подія good = notify_task_created повернула delivered=true.
+    source: >-
+      Logs only, there is no metric: good = valid - count("Notifier unavailable, fallback used").
+      valid = count('"POST /tasks HTTP/1.1" 201').
+    slo: 99.0
+    sla: 97.0
+    current_model: 33.3
+    current_basis: Lab 2 fault injection, 1 of 3 POSTs delivered (ok / error / timeout), doc/lab2_results/fault_after.txt
+error_budget_policy:
+  burn_alerts:
+    fast: {window: 1h, burn_rate: 14.4, budget_share: "2%", action: page SRE on-call}
+    slow: {window: 6h, burn_rate: 6, budget_share: "5%", action: ticket for L2}
+  thresholds:
+    - remaining: ">50%"
+      releases: звичайні Standard і Normal зміни за регламентом CCB
+    - remaining: "25-50%"
+      releases: Normal-зміни лише з планом відкату, перевіреним на staging, і додатковим рев'ю SRE
+    - remaining: "<25%"
+      releases: лише зміни, що підвищують надійність, і виправлення дефектів SLI
+    - remaining: "<=0% або SEV1 за останні 7 днів"
+      releases: CHANGE FREEZE. Лише Emergency-зміни через ECAB, доки бюджет не відновиться у ковзному вікні та не закриються CAPA з post-mortem

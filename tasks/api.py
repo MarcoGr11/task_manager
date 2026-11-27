@@ -31,7 +31,8 @@ storage = TaskStorage(Path(os.getenv("TASKS_DB", "tasks.json")))
 user_storage = UserStorage(Path(os.getenv("USERS_DB", "users.json")))
 consent_storage = ConsentStorage(Path(os.getenv("CONSENTS_DB", "consents.json")))
 app = FastAPI(title="Task Manager API")
-Instrumentator().instrument(app).expose(app)  # GET /metrics: request count/latency histograms
+# GET /metrics: request count/latency histograms; 0.3 s bucket = latency SLO threshold (docs/slo.yaml)
+Instrumentator().instrument(app, latency_lowr_buckets=(0.1, 0.3, 0.5, 1)).expose(app)
 # Off by default; set e.g. CORS_ALLOW_ORIGINS=http://127.0.0.1:8001 so the docs site's Swagger UI can call the API.
 _cors_origins = [o for o in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if o]
 if _cors_origins:
@@ -41,6 +42,17 @@ if _cors_origins:
 _proc = psutil.Process()
 Gauge("app_process_cpu_percent", "API process CPU, % of one core").set_function(lambda: _proc.cpu_percent(None))
 Gauge("app_process_rss_bytes", "API process resident memory").set_function(lambda: _proc.memory_info().rss)
+
+
+def _task_store_records() -> float:
+    """Record count for the data-loss alert (TaskStoreShrink, RB-001); NaN if the store is unreadable."""
+    try:
+        return len(storage.load())
+    except (OSError, ValueError):
+        return float("nan")
+
+
+Gauge("task_store_records", "Tasks in TASKS_DB, NaN if unreadable").set_function(_task_store_records)
 
 
 def current_user_id(x_user_id: int | None = Header(default=None)) -> int:

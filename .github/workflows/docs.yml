@@ -1,0 +1,73 @@
+# Documentation as Code pipeline (Lab 11).
+# Every push and pull request checks the docs; only master is deployed to GitHub Pages.
+name: docs
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Checkout with full history: git-revision-date-localized reads each page's last commit date.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 2. Python for MkDocs, mkdocstrings (reads tasks/*.py) and the docs scripts.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-docs.txt
+
+      # 3. MkDocs Material and plugins, pinned in requirements-docs.txt.
+      - name: Install MkDocs Material and plugins
+        run: pip install -r requirements-docs.txt
+
+      # 4. markdownlint: style and structure of docs/, README.md, CHANGELOG.md (.markdownlint-cli2.yaml).
+      - name: markdownlint
+        uses: DavidAnson/markdownlint-cli2-action@v19
+
+      # 5. OpenAPI: structural validation, then Spectral rules (.spectral.yaml); any error fails the job.
+      - name: Validate OpenAPI
+        run: openapi-spec-validator docs/api/openapi.yaml
+      - name: Spectral lint
+        run: npx --yes @stoplight/spectral-cli@6 lint docs/api/openapi.yaml --ruleset .spectral.yaml --fail-severity error
+
+      # 6. Front matter and review_date: invalid metadata fails, overdue pages are listed in the log.
+      - name: Review dates
+        run: python scripts/review_dates.py
+
+      # 7. Strict build: a dead link, a page outside nav or any plugin warning fails the job.
+      - name: mkdocs build --strict
+        run: mkdocs build --strict
+
+      # 8. Hand the built site to the Pages deploy job.
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+        with:
+          path: site
+
+  # 9. Deploy to GitHub Pages, only from master after a green build.
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

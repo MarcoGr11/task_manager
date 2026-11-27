@@ -5,6 +5,9 @@ import random
 import time
 
 import httpx
+from prometheus_client import Counter, Gauge
+
+from . import notifier_outbox
 
 NOTIFIER_URL = os.getenv("NOTIFIER_URL", "http://localhost:9100/notify")
 
@@ -16,6 +19,13 @@ TIMEOUT_SECONDS = float(os.getenv("NOTIFIER_TIMEOUT_SECONDS", "1.0"))  # per att
 
 logger = logging.getLogger(__name__)
 _rng = random.SystemRandom()
+
+# CAPA CA-1 (INC-001): delivery outcome as a metric; SLI background_notifications and alert NotifierFallbackRatio.
+DELIVERIES = Counter("notifier_delivery", "Task-created notifications by outcome", ["result"])
+for _result in ("delivered", "fallback", "lost"):
+    DELIVERIES.labels(_result)  # export zeros so rate() works before the first failure
+Gauge("notifier_outbox_pending", "Notifications waiting in the outbox for replay").set_function(
+    lambda: len(notifier_outbox.pending()))
 
 
 def _is_retryable(error: httpx.HTTPError) -> bool:
@@ -37,6 +47,7 @@ def notify_task_created(task: dict) -> dict:
         try:
             response = httpx.post(NOTIFIER_URL, json=task, timeout=TIMEOUT_SECONDS)
             response.raise_for_status()
+            DELIVERIES.labels("delivered").inc()
             return {"delivered": True, "attempts": attempt}
         except httpx.HTTPError as error:
             logger.warning("Notifier attempt %d/%d failed: %r", attempt, MAX_ATTEMPTS, error)
@@ -45,4 +56,15 @@ def notify_task_created(task: dict) -> dict:
             if attempt < MAX_ATTEMPTS:
                 time.sleep(backoff_delay(attempt))
     logger.error("Notifier unavailable, fallback used for task %s", task.get("id"))
+    _keep_for_replay(task)
     return {"delivered": False, "attempts": attempt}
+
+
+def _keep_for_replay(task: dict) -> None:
+    """CAPA CA-2: park the notification in the outbox; a failing disk must not turn 201 into 500 (IA-001 R2)."""
+    try:
+        notifier_outbox.append(task)
+        DELIVERIES.labels("fallback").inc()
+    except OSError:
+        logger.exception("Outbox write failed, notification lost for task %s", task.get("id"))
+        DELIVERIES.labels("lost").inc()

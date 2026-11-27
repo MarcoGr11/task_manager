@@ -46,8 +46,11 @@ slis:
       Кількість нотифікацій «задачу створено», доставлених нотифікатору, поділена на кількість створених задач, за 30 днів.
       Подія valid = кожен успішний POST /tasks (201). Подія good = notify_task_created повернула delivered=true.
     source: >-
-      Logs only, there is no metric: good = valid - count("Notifier unavailable, fallback used").
-      valid = count('"POST /tasks HTTP/1.1" 201').
+      Since 1.1.0 (RFC-001, CA-1): good = sum(increase(notifier_delivery_total{result="delivered"}[30d])),
+      valid = sum(increase(notifier_delivery_total[30d])). Results: delivered | fallback (kept in the outbox) | lost
+      (outbox write failed). Backlog gauge: notifier_outbox_pending. Before 1.1.0 the only source was the log line
+      "fallback used" (INC-001).
+    alert: NotifierFallbackRatio
     slo: 99.0
     sla: 97.0
     current_model: 33.3

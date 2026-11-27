@@ -16,6 +16,9 @@ users.json
 consents.json
 *.json.tmp
 
+# Lab 12: notification outbox (runtime data, backed up by scripts/backup.py)
+notifications_outbox.jsonl*
+
 # Lab5: raw per-request k6 output (large), summaries are committed instead
 doc/lab5_results/*_k6_raw.csv*
 

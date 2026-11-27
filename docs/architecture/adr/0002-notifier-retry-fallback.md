@@ -2,7 +2,7 @@
 title: "ADR-0002: Retry + Fallback нотифікатора"
 owner: MarcoGr11
 status: published
-adr_status: Accepted
+adr_status: Superseded by ADR-0005
 review_date: 2027-05-26
 tags:
   - architecture
@@ -12,7 +12,7 @@ tags:
 # ADR-0002: Retry + Fallback нотифікатора
 
 - **Номер:** 0002
-- **Статус:** Accepted. Рішення діє з `6fd3115` (2026-09-27); ADR записано ретроспективно 2026-11-27. Замінює посилання на неіснуючий `README_LAB2.md`.
+- **Статус:** Superseded by ADR-0005 (2026-11-27) у частині «нотифікацію, що не дійшла, втрачено». Retry, backoff і fallback із 201 лишаються чинними. Рішення діяло з `6fd3115` (2026-09-27); ADR записано ретроспективно 2026-11-27. Замінює посилання на неіснуючий `README_LAB2.md`.
 - **Компонент:** [[architecture/sdd#sdd-notifier|SDD: Клієнт нотифікатора]], [[architecture/isd#isd-env|ISD: змінні оточення]]
 
 ## Контекст

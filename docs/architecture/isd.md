@@ -65,7 +65,7 @@ flowchart LR
 
 ## 3. Змінні оточення
 
-Секретів у цих змінних немає. `.env.example` у корені містить їх із типовими значеннями.
+Секрет серед цих змінних лише один: `BACKUP_PASSPHRASE`. `.env.example` у корені містить їх із типовими значеннями.
 
 | Змінна | Типове значення | Хто читає | Компонент SDD |
 |---|---|---|---|
@@ -74,7 +74,9 @@ flowchart LR
 | `CONSENTS_DB` | `consents.json` | `tasks/api.py`, `tasks/seed_users.py` | [[architecture/sdd#sdd-storage]] |
 | `NOTIFIER_URL` | `http://localhost:9100/notify` | `tasks/notifier_resilient.py` | [[architecture/sdd#sdd-notifier]] |
 | `NOTIFIER_TIMEOUT_SECONDS` | `1.0` (секунди на одну спробу) | `tasks/notifier_resilient.py` | [[architecture/sdd#sdd-notifier]] |
+| `NOTIFIER_OUTBOX` | `notifications_outbox.jsonl` | `tasks/notifier_outbox.py` | недоставлені нотифікації (з 1.1.0, [[architecture/adr/0005-notification-outbox]]). Входить у бекап |
 | `CORS_ALLOW_ORIGINS` | порожньо (CORS вимкнено) | `tasks/api.py` | [[architecture/sdd#sdd-api]] |
+| `BACKUP_PASSPHRASE` | немає; без нього архіви не шифруються | `scripts/backup.py` | [[runbooks/RB-001]]. Секрет: лише в оточенні, ніколи у файлах |
 | `HOURLY_RATE`, `OVERLOAD_COEFF`, `DISCOUNT_RATE` | ставка обов'язкова (35-50), 1.3, 0.01 | `scripts/fin_sim.py` | не runtime (інструмент Лаби 9) |
 | `AWS_ACCESS_KEY_ID` | порожньо | код не читає. Ключ є лише в `.env.example` для перевірки gitleaks | – |
 | `SONAR_TOKEN` | лише в оточенні, ніколи у файлах | `sonar-scanner` | інструмент якості |
@@ -83,20 +85,95 @@ CLI (`tasks/cli.py`) змінних не читає: працює з `./tasks.js
 
 <a id="isd-storage"></a>
 
-## 4. Сховище, бекап, RTO/RPO
+## 4. Сховище, бекап, відновлення, RTO/RPO
 
-- **Сховище.** Три JSON-файли на локальному диску. Рішення описано в [[architecture/adr/0001-json-file-storage|ADR-0001]]. `save_all` записує `*.tmp`, потім виконує `os.replace`.
-- **Поточний бекап.** Відсутній. У репозиторії немає скрипта чи розкладу копіювання. Файли даних не відстежуються git.
-- **Процедура (перевірена 2026-11-27, `docs/audit/restore_drill.txt`):**
-    1. Бекап: `mkdir -p backup && cp -p *.json backup/`.
-    2. Відновлення: `cp -p backup/*.json .`.
-    3. Перевірка кількості записів через `tasks.api`.
-    4. Результат виміру: `real 0.39` с для 5 задач, 3 користувачів і 0 згод. Відновлено 5, 3 і 0.
+**Сховище.** Три JSON-файли на локальному диску. Рішення описано в [[architecture/adr/0001-json-file-storage|ADR-0001]]. `save_all` записує `*.tmp`, потім виконує `os.replace`. Інструмент бекапу: `scripts/backup.py` (з ЛР12). Операційна процедура: [[runbooks/RB-001]].
 
-| Показник | Поточний стан | Ціль |
+<a id="isd-deploy"></a>
+
+### 4.1. Розгортання з health-перевіркою
+
+Порядок такий: бекап, тести, перезапуск, health, smoke. Реальний прогін релізу `v1.1.0` збережено в `doc/lab12_results/deploy_drill.txt`.
+
+1. `git fetch --tags && git checkout <тег релізу>`, потім `pip install -r requirements.txt`.
+2. Бекап перед розгортанням: `python scripts/backup.py backup --dest backups`.
+3. `python -m pytest -q`: червоні тести означають, що реліз не розгортається.
+4. Зупинити старий процес: `kill $(lsof -tiTCP:8000 -sTCP:LISTEN)`.
+5. Запустити новий процес: `uvicorn tasks.api:app --port 8000 &`.
+6. Health-перевірка: `for i in $(seq 1 50); do curl -fsS localhost:8000/health && break; sleep 0.2; done`. Якщо за 10 с немає `{"status":"ok"}`, виконується відкат.
+7. Smoke-перевірка: `GET /tasks` дає 200, а `GET /metrics` містить `task_store_records`.
+8. Відкат: `git checkout <попередній тег>`, перезапуск (кроки 4-6). Якщо реліз мав міграцію, ще потрібне відновлення з бекапу кроку 2 за [[runbooks/RB-001]].
+
+### 4.2. Оновлення з міграціями
+
+Кожен реліз у [CHANGELOG](https://github.com/MarcoGr11/task_manager/blob/master/CHANGELOG.md) має пункт «Міграції»: формат даних, скрипт, зворотність. Порядок такий:
+
+1. бекап перед міграцією;
+2. зупинка застосунку;
+3. ідемпотентний скрипт міграції, який друкує кількість записів до і після;
+4. запуск нового коду;
+5. health-перевірка;
+6. порівняння кількості записів.
+
+Міграція без зворотного скрипта відкочується лише відновленням з бекапу кроку 1. Реліз `1.1.0` міграцій не має: новий файл `NOTIFIER_OUTBOX` створюється лише під час першого збою доставки, а наявні сховища не змінюються.
+
+### 4.3. Відновлення: спочатку дані, потім застосунок
+
+1. Зупинити застосунок, щоб ніхто не писав у сховище, яке відновлюється.
+2. Відновити й перевірити дані: `scripts/backup.py verify`, потім `restore`. Скрипт звіряє SHA-256 з маніфестом і замінює файли атомарно.
+3. Запустити застосунок і виконати health-перевірку.
+4. Звірити кількість записів із маніфестом.
+
+Якщо запустити застосунок до відновлення даних, він обслуговуватиме запити з пошкодженого сховища. Запис нових даних у старий файл потім перезапише відновлення. Деталі в [[runbooks/RB-001]].
+
+<a id="isd-rto"></a>
+
+### 4.4. RTO і RPO
+
+| Складова RTO | Значення | Джерело |
 |---|---|---|
-| RPO | не гарантовано: бекапу немає, втрачаються всі дані | дорівнює інтервалу копіювання; інтервал потребує підтвердження студента |
-| RTO | не визначено | виміряно 0.39 с на копіювання та перевірку плюс перезапуск uvicorn. Цільове значення потребує підтвердження студента |
+| Виявлення | ≤ 7 хв: вікно `rate[5m]` + `for: 2m` у `TaskStoreReadErrors` (scrape і evaluation 5 с) | `monitoring/alerts.yml` |
+| Реакція on-call | ≤ 15 хв (SEV1) | [[maintenance-plan#escalation]] |
+| Виконання RB-001 (зупинка → health 200) | 1349 мс виміряно (5 задач); повний бекап 5000 задач створюється за 0.069 с | `restore_drill.txt`, `backup_volume.txt` |
+| Верифікація | ≤ 5 хв | RB-001 |
+| **Разом** | 7 + 15 + 0.02 + 5 ≈ 27 хв | |
+
+| Показник | Ціль | Обґрунтування |
+|---|---|---|
+| **RTO** | **30 хв** | 27 хв за розрахунком вище плюс запас; виконання автоматизованої частини займає секунди, основна частка припадає на людську реакцію |
+| **RPO** | **1 год** | дорівнює інтервалу інкрементального бекапу. Drill підтвердив: задача, створена після останнього incr, втрачена (1 з 9) |
+
+<a id="isd-backup"></a>
+
+### 4.5. Backup policy
+
+| Параметр | Значення |
+|---|---|
+| Обсяг | дані займають 904 409 Б (`tasks.json` 902 788, `users.json` 1 014, `consents.json` 607). З 1.1.0 до бекапу входить і `NOTIFIER_OUTBOX`: без збоїв доставки файлу немає. Повний зашифрований архів має 30 992 Б, incr без змін 384 Б (`backup_volume.txt`) |
+| Розклад | повний щодня о 02:00 UTC; інкрементальний щогодини о :05 (лише файли, у яких змінився SHA-256) |
+| Retention | incr 7 днів (вони потрібні лише в межах денного ланцюга), денні full 7 днів, тижневі full 4 тижні, місячні full 12 місяців. Найгірший випадок 5.44 MiB на копію (`calc.txt`) |
+| Шифрування | `BACKUP_PASSPHRASE` → `openssl enc -aes-256-cbc -pbkdf2 -salt`. Ключ лише в оточенні чи сховищі секретів. Цілісність контролює SHA-256 у маніфесті всередині архіву |
+| 3-2-1 | 3 копії: робочі файли, `backups/` на окремому диску, офсайт. 2 типи носіїв: локальний SSD і об'єктне сховище. 1 офсайт: зашифрований архів. Конкретне офсайт-сховище потребує підтвердження студента |
+| Перевірка | `scripts/backup.py verify` для кожного нового архіву. Restore drill раз на квартал і після кожної зміни формату даних |
+
+Розклад у cron (на машині розробника не встановлено, бо постійної prod-машини немає):
+
+```text
+0 2 * * *  cd /srv/task_manager && python scripts/backup.py backup --dest backups
+5 * * * *  cd /srv/task_manager && python scripts/backup.py backup --dest backups --incremental
+```
+
+### 4.6. Restore drill
+
+Процедуру виконано 2026-11-27 скриптом `doc/lab12/restore_drill.sh`. Вивід: `doc/lab12_results/restore_drill.txt`.
+
+1. Ізольовані сховища в `mktemp -d`, `seed_users`: 5 задач, 3 користувачі.
+2. Повний бекап, 3 нові задачі, інкрементальний бекап (`included=['tasks']`), ще 1 задача.
+3. Імітація інциденту: `printf '{corrupt' > $TASKS_DB`. Результат: `GET /tasks` дає 500 тричі, `task_store_records NaN`, лічильник 5xx дорівнює 3.
+4. RB-001: зупинка, збереження пошкодженого файлу, `verify` обох архівів (OK), `restore`, запуск, health 200.
+5. Результат: 8 задач відновлено, 1 втрачено (вікно RPO), `task_store_records 8.0`. **RTO_measured_ms=1349.**
+
+Попередня перевірка ЛР10 (`docs/audit/restore_drill.txt`, ручне `cp`) лишається історичною.
 
 <a id="isd-cicd"></a>
 
@@ -126,4 +203,5 @@ CD (розгортання) немає.
     - `app_process_cpu_percent` і `app_process_rss_bytes` через psutil.
 - **Grafana.** Datasource `prom` (`http://prometheus:9090`), дашборд `monitoring/grafana/dashboards/lab5.json` «Task Manager - Lab5 Stability». Панелі: RPS, latency, CPU, RAM.
 - **Логи.** stdout uvicorn, INFO. Фільтр `SensitiveDataFilter` маскує PII. Аудит-події пишуться JSON-рядками.
-- **Алерти.** Не налаштовані.
+- **Алерти.** З ЛР12 діють 6 правил у `monitoring/alerts.yml` (`rule_files` у `prometheus.yml`, `promtool check rules`: SUCCESS). Каталог: [[runbooks/index]]. SLO: [[slo]]. Alertmanager не розгорнуто, тож алерти видно лише у вкладці Alerts Prometheus.
+- **Метрика сховища.** `task_store_records`: кількість задач або `NaN`, якщо файл не читається (з ЛР12).

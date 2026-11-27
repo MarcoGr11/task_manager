@@ -5,7 +5,7 @@ Usage (from the repository root, same environment as the API):
     python scripts/backup.py verify backups/<archive>
     python scripts/backup.py restore backups/<full> [backups/<incr> ...]
 
-Stores come from TASKS_DB, USERS_DB, CONSENTS_DB (defaults as in tasks/api.py).
+Stores come from TASKS_DB, USERS_DB, CONSENTS_DB, NOTIFIER_OUTBOX (defaults as in tasks/).
 A full archive holds every store, an incremental one only stores whose SHA-256 changed
 since the previous backup in --dest. Every manifest lists the hashes of ALL stores, so
 restoring "full + incrementals in order" is checked against the last manifest.
@@ -24,7 +24,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 STORES = {"tasks": ("TASKS_DB", "tasks.json"), "users": ("USERS_DB", "users.json"),
-          "consents": ("CONSENTS_DB", "consents.json")}
+          "consents": ("CONSENTS_DB", "consents.json"),
+          "outbox": ("NOTIFIER_OUTBOX", "notifications_outbox.jsonl")}  # RFC-001: undelivered notifications
 STATE = "last_manifest.json"
 OPENSSL = ["openssl", "enc", "-aes-256-cbc", "-pbkdf2", "-salt", "-pass", "env:BACKUP_PASSPHRASE"]
 
@@ -38,7 +39,9 @@ def sha256(data: bytes) -> str:
 
 
 def records(data: bytes) -> int:
-    return len(json.loads(data)) if data.strip() else 0
+    if not data.strip():
+        return 0
+    return len(json.loads(data)) if data.lstrip()[:1] == b"[" else len(data.splitlines())  # JSON list or JSONL
 
 
 def snapshot() -> dict[str, bytes]:

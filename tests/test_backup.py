@@ -45,3 +45,15 @@ def test_encrypted_roundtrip(tmp_path, monkeypatch):
     assert archive.name.endswith(".tar.gz.enc")
     assert b"manifest" not in archive.read_bytes()  # ciphertext, not a plain tar
     assert backup.main(["verify", str(archive)]) == 0
+
+
+def test_outbox_is_backed_up_and_counted_by_lines(tmp_path, monkeypatch):
+    """RFC-001: undelivered notifications (JSONL outbox) are data and go into the backup."""
+    stores(tmp_path, monkeypatch, [])
+    outbox = tmp_path / "outbox.jsonl"
+    outbox.write_text('{"id": 7}\n{"id": 8}\n')
+    monkeypatch.setenv("NOTIFIER_OUTBOX", str(outbox))
+
+    manifest, members = backup.read_archive(backup.backup(tmp_path / "bk", incremental=False))
+
+    assert manifest["files"]["outbox"]["records"] == 2 and members["outbox"] == outbox.read_bytes()

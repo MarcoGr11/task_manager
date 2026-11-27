@@ -115,6 +115,8 @@ Rel(prom, api, "GET /metrics", "HTTP")
   | Що повторюється | помилки транспорту і HTTP 5xx |
 
   Якщо доставка не вдалася, функція повертає `delivered: false` без винятку. Задачу при цьому вже збережено.
+- **Outbox (з 1.1.0, RFC-001).** Після fallback задача дописується JSON-рядком у `NOTIFIER_OUTBOX` (`tasks/notifier_outbox.py`). Повторна доставка лише вручну: `python -m tasks.notifier_outbox replay`. Рішення: [[architecture/adr/0005-notification-outbox|ADR-0005]].
+- **Метрики.** `notifier_delivery_total{result="delivered|fallback|lost"}` і `notifier_outbox_pending`. Вони живлять SLI `background_notifications` ([[slo]]) і алерт `NotifierFallbackRatio`.
 - `tasks/notifier.py` – базовий клієнт без retry. Ні код, ні тести його не імпортують (dead code).
 - **Залежності:** `httpx`, зовнішній [Notification service](#sdd-mock). Рішення описано в [[architecture/adr/0002-notifier-retry-fallback|ADR-0002]].
 - **Інфраструктура:** [[architecture/isd#isd-env|ISD: змінні оточення]].

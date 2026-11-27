@@ -17,6 +17,12 @@ BOB = User(2, "Bob Sample", "bob@example.com", "+380671112233", "pbkdf2_sha256$0
 ADMIN = User(3, "Admin Demo", "admin@example.com", "+380931234500", "pbkdf2_sha256$00$x", None, is_admin=True)
 
 
+@pytest.fixture(autouse=True)
+def _isolated_outbox(monkeypatch, tmp_path):
+    """Fallback notifications from any test go to tmp, never to the repository root (Lab 12, CA-2)."""
+    monkeypatch.setenv("NOTIFIER_OUTBOX", str(tmp_path / "outbox.jsonl"))
+
+
 @pytest.fixture
 def privacy_env(monkeypatch, tmp_path, caplog):
     caplog.set_level(logging.INFO)

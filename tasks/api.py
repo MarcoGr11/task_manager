@@ -2,6 +2,7 @@
 import json
 import logging
 import os
+import threading
 import uuid
 from dataclasses import asdict
 from pathlib import Path
@@ -31,6 +32,10 @@ storage = TaskStorage(Path(os.getenv("TASKS_DB", "tasks.json")))
 user_storage = UserStorage(Path(os.getenv("USERS_DB", "users.json")))
 consent_storage = ConsentStorage(Path(os.getenv("CONSENTS_DB", "consents.json")))
 app = FastAPI(title="Task Manager API")
+# CAPA CA-3 (INC-001): every load-modify-save of a store runs under this lock; FastAPI runs sync handlers in a
+# thread pool, and without it concurrent POSTs overwrote each other (667 x 201, 547 tasks stored).
+# ponytail: process-local; several uvicorn workers would need a file lock (fcntl.flock) or a real DB.
+_write_lock = threading.Lock()
 # GET /metrics: request count/latency histograms; 0.3 s bucket = latency SLO threshold (docs/slo.yaml)
 Instrumentator().instrument(app, latency_lowr_buckets=(0.1, 0.3, 0.5, 1)).expose(app)
 # Off by default; set e.g. CORS_ALLOW_ORIGINS=http://127.0.0.1:8001 so the docs site's Swagger UI can call the API.
@@ -116,10 +121,11 @@ def get_task(task_id: int) -> dict:
 
 @app.post("/tasks", status_code=201)
 def create_task(payload: TaskIn) -> dict:
-    tasks = storage.load()
-    task = Task(id=storage.next_id(tasks), title=payload.title, priority=payload.priority)
-    tasks.append(task)
-    storage.save(tasks)
+    with _write_lock:
+        tasks = storage.load()
+        task = Task(id=storage.next_id(tasks), title=payload.title, priority=payload.priority)
+        tasks.append(task)
+        storage.save(tasks)
     result = notify_task_created(task.to_dict())
     return {
         **task.to_dict(),
@@ -137,6 +143,11 @@ def _validate_new_user(payload: UserIn, users: list[User]) -> None:
 
 @app.post("/api/users", status_code=201)
 def register_user(payload: UserIn) -> dict:
+    with _write_lock:
+        return _register_user(payload)
+
+
+def _register_user(payload: UserIn) -> dict:
     users = user_storage.load()
     try:
         _validate_new_user(payload, users)
@@ -173,6 +184,11 @@ def export_personal_data(
 def anonymize(
     user_id: int, actor_id: int = Depends(current_user_id), corr_id: str = Depends(correlation_id)
 ) -> dict:
+    with _write_lock:
+        return _anonymize(user_id, actor_id, corr_id)
+
+
+def _anonymize(user_id: int, actor_id: int, corr_id: str) -> dict:
     users, user = authorize_subject(actor_id, user_id, corr_id, "anonymize", allow_admin=True)
     try:
         consents = consent_storage.load()
@@ -196,9 +212,10 @@ def _consent_command(command, user_id: int, purpose: str, actor_id: int, corr_id
     if purpose not in PURPOSES:
         raise HTTPException(status_code=422, detail=f"Unknown consent purpose, allowed: {sorted(PURPOSES)}")
     authorize_subject(actor_id, user_id, corr_id, f"consent_{command.__name__}")
-    consents, consent, changed = command(consent_storage.load(), user_id, purpose, source)
-    if changed:
-        consent_storage.save(consents)
+    with _write_lock:
+        consents, consent, changed = command(consent_storage.load(), user_id, purpose, source)
+        if changed:
+            consent_storage.save(consents)
     _audit(f"consent_{command.__name__}", actor_id, user_id, "changed" if changed else "unchanged", corr_id)
     return asdict(consent) if consent else {"user_id": user_id, "purpose": purpose, "is_granted": False}
 

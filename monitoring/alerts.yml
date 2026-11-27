@@ -39,6 +39,15 @@ groups:
         annotations:
           summary: "p95 of /tasks latency above 300 ms for 10 min (latency SLO, docs/slo.yaml)"
           runbook_url: docs/maintenance-plan.md#known-issues
+      - alert: NotifierFallbackRatio
+        expr: |
+          sum(rate(notifier_delivery_total{job="task_manager",result!="delivered"}[2m]))
+            / sum(rate(notifier_delivery_total{job="task_manager"}[2m])) > 0.05
+        for: 1m
+        labels: {severity: SEV2, role: SRE on-call}
+        annotations:
+          summary: "More than 5% of task notifications fall back to the outbox (notifier down?), RFC-001 / INC-001"
+          runbook_url: docs/maintenance-plan.md#known-issues
       - alert: ApiDown
         expr: up{job="task_manager"} == 0
         for: 1m

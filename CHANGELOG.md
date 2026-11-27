@@ -9,6 +9,11 @@
 
 ## [Unreleased]
 
+### Виправлено
+
+- CI: крок markdownlint перевіряє лише `docs/**/*.md`, `README.md`, `CHANGELOG.md` (типовий glob action-у чіпляв `FINANCIAL_LEDGER.md`).
+- Мертве посилання `../architecture/deployment.md` у `local-setup.md` (навмисний FAIL-дефект ЛР11) прибрано.
+
 ## [docs-v2.0] - 2026-11-27
 
 ### Змінено (breaking)

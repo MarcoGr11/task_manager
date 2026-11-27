@@ -24,7 +24,7 @@ uvicorn tasks.api:app --port 8000
 curl localhost:8000/health                   # {"status":"ok"}
 ```
 
-Контракти маршрутів: [[api/index|API]]. Розгортання в prod: [deployment](../architecture/deployment.md).
+Контракти маршрутів: [[api/index|API]].
 
 ## CLI без сервера
 

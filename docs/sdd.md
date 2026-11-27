@@ -26,7 +26,7 @@ title Task Manager: контейнери
 Person(user, "Користувач / клієнт API", "HTTP-запити з X-User-Id")
 Person(dev, "Розробник", "CLI, seed-скрипти")
 System_Boundary(tm, "Task Manager") {
-  Container(api, "Task Manager API", "Python 3.13, FastAPI, uvicorn :8000", "REST API, /metrics")
+  Container(api, "Task Manager API", "Python 3.13, FastAPI, uvicorn :8000", "REST API: задачі (список, одна за id), користувачі, згоди; /metrics")
   Container(cli, "CLI", "Python argparse", "add, list, stats, done")
   ContainerDb(files, "JSON-сховище", "tasks.json, users.json, consents.json", "TASKS_DB, USERS_DB, CONSENTS_DB")
 }
@@ -36,7 +36,7 @@ Rel(user, api, "HTTP JSON")
 Rel(dev, cli, "командний рядок")
 Rel(api, files, "load/save, os.replace")
 Rel(cli, files, "load/save")
-Rel(api, notifier, "POST /notify, retry 3x, timeout 1 с", "httpx")
+Rel(api, notifier, "POST /notify, retry 3x, timeout NOTIFIER_TIMEOUT_SECONDS (1 с)", "httpx")
 Rel(prom, api, "GET /metrics", "HTTP")
 ```
 
@@ -90,7 +90,7 @@ Rel(prom, api, "GET /metrics", "HTTP")
   | Параметр | Значення |
   |---|---|
   | Максимум спроб | 3 |
-  | Timeout спроби | 1.0 с |
+  | Timeout спроби | `NOTIFIER_TIMEOUT_SECONDS`, за замовчуванням 1.0 с |
   | Backoff | 0.2 с, потім 0.4 с, плюс jitter до 0.1 с |
   | Що повторюється | помилки транспорту і HTTP 5xx |
 
@@ -139,6 +139,7 @@ Rel(prom, api, "GET /metrics", "HTTP")
 |---|---|---|---|
 | `GET /health` | – | 200 `{"status":"ok"}` | – |
 | `GET /tasks` | – | 200 `[Task]` (`priority` як ім'я: `"HIGH"`) | – |
+| `GET /tasks/{task_id}` | `task_id: int` | 200 `Task` | 404 `Task not found`, 422 нечисловий id |
 | `POST /tasks` | `{"title": str>=1, "priority": 1, 2 або 3}` (число; `"HIGH"` дає 422) | 201 `Task` + `notification_delivered: bool`, `notification_attempts: int` | 422 |
 | `POST /api/users` | `{"name", "email", "phone", "password" (>=8)}` | 201 `{"id"}` | 422 невалідний або дубльований email |
 | `GET /api/users/{user_id}/personal-data` | `X-User-Id` = `user_id` | 200 експорт (профіль без секретів, задачі, згоди) | 401, 403 |

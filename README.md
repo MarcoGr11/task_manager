@@ -43,6 +43,7 @@ python -m tasks.cli stats
 |---|---|
 | `GET /health` | перевірка живості |
 | `GET /tasks` | список задач |
+| `GET /tasks/{task_id}` | одна задача, 404 якщо немає |
 | `POST /tasks` | створити задачу (`priority` числом 1-3) і сповістити нотифікатор |
 | `POST /api/users` | реєстрація |
 | `GET /api/users/{user_id}/personal-data` | експорт персональних даних |

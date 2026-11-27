@@ -60,6 +60,7 @@ flowchart LR
 | `USERS_DB` | `users.json` | `tasks/api.py`, `tasks/seed_users.py` | [Сховище](sdd.md#sdd-storage) |
 | `CONSENTS_DB` | `consents.json` | `tasks/api.py`, `tasks/seed_users.py` | [Сховище](sdd.md#sdd-storage) |
 | `NOTIFIER_URL` | `http://localhost:9100/notify` | `tasks/notifier_resilient.py` | [Нотифікатор](sdd.md#sdd-notifier) |
+| `NOTIFIER_TIMEOUT_SECONDS` | `1.0` (секунди на одну спробу) | `tasks/notifier_resilient.py` | [Нотифікатор](sdd.md#sdd-notifier) |
 | `HOURLY_RATE`, `OVERLOAD_COEFF`, `DISCOUNT_RATE` | ставка обов'язкова (35-50), 1.3, 0.01 | `scripts/fin_sim.py` | не runtime (інструмент Лаби 9) |
 | `AWS_ACCESS_KEY_ID` | порожньо | код не читає. Ключ є лише в `.env.example` для перевірки gitleaks | – |
 | `SONAR_TOKEN` | лише в оточенні, ніколи у файлах | `sonar-scanner` | інструмент якості |

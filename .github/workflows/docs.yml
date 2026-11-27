@@ -54,6 +54,10 @@ jobs:
       - name: Review dates
         run: python scripts/review_dates.py
 
+      # 6b. Operational readiness (Lab 12, PA-1): every alert has an existing runbook, every SLI has an alert.
+      - name: Ops readiness audit
+        run: python scripts/ops_audit.py
+
       # 7. Strict build: a dead link, a page outside nav or any plugin warning fails the job.
       - name: mkdocs build --strict
         run: mkdocs build --strict

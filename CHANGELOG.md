@@ -7,7 +7,38 @@
 
 Версія API живе окремо, в `info.version` файлу `docs/api/openapi.yaml` (SemVer).
 
+З ЛР12 тут також фіксуються релізи застосунку (теги `vMAJOR.MINOR.PATCH`), бо зміни коду і документації йдуть одним RFC.
+
 ## [Unreleased]
+
+## [1.1.0] - 2026-11-27
+
+Реліз застосунку за [RFC-001](docs/change/rfc-001.md) і ECAB-2026-11-27, наслідок [INC-001](docs/incidents/inc-001.md).
+
+**Міграції: немає.** `tasks.json`, `users.json`, `consents.json` не змінюють формат. Новий файл `NOTIFIER_OUTBOX` створюється лише під час першого збою доставки. API змінено лише additive, тож `info.version` OpenAPI лишається 1.0.1.
+
+### Додано
+
+- Outbox недоставлених нотифікацій `tasks/notifier_outbox.py` і ручна команда `python -m tasks.notifier_outbox replay` (CA-2, ADR-0005).
+- Метрики `notifier_delivery_total{result}` і `notifier_outbox_pending`; алерт `NotifierFallbackRatio` (CA-1).
+- Змінна оточення `NOTIFIER_OUTBOX`; outbox входить у `scripts/backup.py`.
+- `scripts/ops_audit.py`, перевірка операційної готовності в CI (PA-1).
+
+### Виправлено
+
+- Втрата підтверджених задач під конкурентним `POST /tasks`: атомарний `TaskStorage.save` і блокування load-modify-save (CA-3).
+
+### Змінено
+
+- ADR-0002 переведено в `Superseded by ADR-0005` у частині втрати нотифікацій.
+
+## [docs-v2.1] - 2026-11-27
+
+### Додано
+
+- Рівень 5 «Експлуатація»: [план супроводу](docs/maintenance-plan.md), [SLO](docs/slo.md) і `docs/slo.yaml`, runbook RB-001 і каталог алертів, RFC-001, IA-001, протокол CCB, release checklist, INC-001, PM-001, реконструкція legacy-підсистеми нотифікацій.
+- ISD §4: розгортання з health-перевіркою, міграції, порядок відновлення, RTO/RPO, backup policy, restore drill.
+- Пункт ORR у чек-листі CONTRIBUTING.
 
 ## [docs-v2.0] - 2026-11-27
 

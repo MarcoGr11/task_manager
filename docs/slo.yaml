@@ -23,6 +23,7 @@ slis:
     slo: 99.5
     sla: 99.0
     current_model: 100.0
+    alert: AvailabilityBudgetFastBurn
     current_basis: Lab 5 step load 10-60 RPS, 0.00% errors (doc/lab5_results/summary.md)
   - id: latency_p95
     name: p95 латентності /tasks* < 300 мс
@@ -35,6 +36,7 @@ slis:
     threshold_ms: 300
     slo: 95.0
     sla: 90.0
+    alert: LatencySLOBreach
     sla_note: SLA за тим самим порогом 300 мс, але дозволяє 10% повільних запитів (p90).
     current_model: 95.0
     current_basis: >-

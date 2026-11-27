@@ -23,6 +23,7 @@ Pull request не зливається, поки не відмічено все,
 - [ ] Змінено маршрут, параметр, код відповіді чи формат: оновлено `docs/api/openapi.yaml`, Spectral дає 0 errors, `info.version` піднято за SemVer.
 - [ ] Нова змінна оточення: рядок в [[architecture/isd]] §3 і в `.env.example`.
 - [ ] Архітектурне рішення: новий ADR у [[architecture/adr/index|журналі]], старий не редаговано.
+- [ ] **Операційна готовність (ORR, з ЛР12, PA-1 у [[incidents/PM-001#capa]]).** Нова зовнішня залежність або фонова робота: метрика результату в `/metrics`, SLI в `docs/slo.yaml` з полем `alert`, правило в `monitoring/alerts.yml` з `runbook_url`, обхід у [[maintenance-plan#known-issues]]. `python scripts/ops_audit.py` проходить (те саме перевіряє CI).
 - [ ] Запис у `CHANGELOG.md` у розділі `Unreleased`.
 - [ ] У змінених сторінках актуальні `status` і `review_date`.
 - [ ] `mkdocs build --strict` і `python scripts/doc_audit.py` проходять локально.

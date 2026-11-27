@@ -37,6 +37,22 @@ nav:
           - architecture/adr/0002-notifier-retry-fallback.md
           - architecture/adr/0003-openapi-as-source-of-truth.md
           - architecture/adr/0004-docs-as-code-mkdocs.md
+          - architecture/adr/0005-notification-outbox.md
+  - "5. Експлуатація (ЛР12)":
+      - maintenance-plan.md
+      - slo.md
+      - Runbooks:
+          - runbooks/index.md
+          - runbooks/rb-001.md
+      - Зміни:
+          - change/rfc-001.md
+          - change/ia-001.md
+          - change/ccb-protocol.md
+          - change/release-checklist.md
+      - Інциденти:
+          - incidents/inc-001.md
+          - incidents/pm-001.md
+          - incidents/legacy-notifier.md
   - Аудит (ЛР10):
       - audit/inventory.md
       - audit/verdicts.md

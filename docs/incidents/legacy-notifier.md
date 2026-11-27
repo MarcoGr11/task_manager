@@ -12,6 +12,8 @@ tags:
 
 Сирий вивід команд, на які спираються позначки **verified**, лежить у `doc/lab12_results/legacy_evidence.txt`. Позначка **assumed** означає висновок з назв, коментарів або аналогії, який не перевірено виконанням чи тестом.
 
+Реконструкцію зроблено до CAPA: номери рядків вказано для коміту `4041c7a`. Зміни після RFC-001 описано в [[architecture/sdd#sdd-notifier]] і [[architecture/adr/0005-notification-outbox]].
+
 ## Чому саме цей компонент
 
 За аудитом ЛР10 ([[audit/inventory]], `docs/audit/decay_metrics.txt`) підсистема нотифікацій задокументована найгірше:
@@ -74,11 +76,11 @@ flowchart LR
 | `notify_task_created(task)` | до 3 спроб `POST`, після вичерпання повертає `delivered=false` без винятку | verified | 6 тестів `tests/test_resilience.py`; INC-001: під час outage доставлено 1 з 164 (запит стартував о 16:55:53.711Z, до зупинки нотифікатора) |
 | `_is_retryable(error)` | повторює лише `TransportError` і HTTP ≥ 500 | verified | `test_client_error_is_not_retried` |
 | `backoff_delay(attempt)` | `0.2 × 2^(n−1)` плюс jitter `U(0, 0.1)` | verified | `test_retry_succeeds_after_two_failures_with_backoff` |
-| `MAX_ATTEMPTS = 3` | обмеження, щоб не «добивати» нотифікатор | verified (значення); мотив **assumed** за коментарем рядка 12 |
+| `MAX_ATTEMPTS = 3` | обмеження, щоб не «добивати» нотифікатор | verified (значення); мотив **assumed** | коментар біля `MAX_ATTEMPTS` у `notifier_resilient.py` |
 | `TIMEOUT_SECONDS` | `NOTIFIER_TIMEOUT_SECONDS`, 1.0 с на спробу | verified | `test_notifier_timeout_default` |
 | Найгірша затримка `POST /tasks` | 3 × 1.0 + 0.6 + 0.2 ≈ 3.8 с при timeout; ≈ 0.8 с при `Connection refused` | verified | ЛР2 `fault_after.txt` (3.81 с); INC-001 (p50 796.4 мс) |
-| `notifier.notify_task_created` (baseline) | 1 спроба, виняток назовні | verified (код); у runtime не викликається |
-| `NotificationService.send` і `EmailNotificationService.*` | in-memory відправка та історія подій, без мережі | verified тестами; бізнес-призначення assumed |
+| `notifier.notify_task_created` (baseline) | 1 спроба, виняток назовні | verified (код) | у runtime не викликається: `git grep "from .notifier import"` порожній |
+| `NotificationService.send` і `EmailNotificationService.*` | in-memory відправка та історія подій, без мережі | verified тестами; бізнес-призначення **assumed** | `tests/test_notification_services.py` |
 
 ## Реєстр технічного боргу
 

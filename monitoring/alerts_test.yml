@@ -1,0 +1,23 @@
+# promtool unit test for CA-1 (INC-001): the INC-001 outage shape must fire NotifierFallbackRatio.
+# Run: docker run --rm -v "$PWD/monitoring:/m" --entrypoint promtool prom/prometheus:v3.5.0 test rules /m/alerts_test.yml
+rule_files: [alerts.yml]
+evaluation_interval: 15s
+tests:
+  - interval: 15s
+    input_series:
+      # baseline 2 min: ~2.5 deliveries per 15 s, no fallback; then outage: ~40 fallbacks per 15 s (162 in 60 s)
+      - series: 'notifier_delivery_total{job="task_manager",result="delivered"}'
+        values: '0+3x8 24+0x8'
+      - series: 'notifier_delivery_total{job="task_manager",result="fallback"}'
+        values: '0+0x8 0+40x8'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: NotifierFallbackRatio
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: NotifierFallbackRatio
+        exp_alerts:
+          - exp_labels: {severity: SEV2, role: SRE on-call}
+            exp_annotations:
+              summary: "More than 5% of task notifications fall back to the outbox (notifier down?), RFC-001 / INC-001"
+              runbook_url: docs/maintenance-plan.md#known-issues

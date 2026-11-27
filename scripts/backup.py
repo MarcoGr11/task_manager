@@ -1,4 +1,4 @@
-"""Backup, verify and restore the JSON data stores (runbook docs/runbooks/RB-001.md).
+"""Backup, verify and restore the JSON data stores (runbook docs/runbooks/rb-001.md).
 
 Usage (from the repository root, same environment as the API):
     python scripts/backup.py backup --dest backups [--incremental]

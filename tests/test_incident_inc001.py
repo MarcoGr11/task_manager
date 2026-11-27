@@ -1,4 +1,4 @@
-"""Regression tests for INC-001 (docs/incidents/INC-001.md): notifier outage and concurrent task creation."""
+"""Regression tests for INC-001 (docs/incidents/inc-001.md): notifier outage and concurrent task creation."""
 import json
 from concurrent.futures import ThreadPoolExecutor
 
